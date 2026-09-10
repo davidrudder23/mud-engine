@@ -41,21 +41,36 @@ than gameplay verbs.
 
 - A telnet server (`server.py` / `mud/telnet_server.py`), port 8023 by
   default, since this is meant to feel like an old-school MUD.
-- Current behavior: on connect, show a random room, then hold the
-  connection open. No login/identity yet — a connection isn't tied to a
-  Player row or placed into `World` via `place_player`.
-- No command parsing yet — that's next: read lines from the connection
-  and dispatch them, which is also when a connection will need to
-  become an actual Player (auth/session, not just an anonymous socket).
+- On connect: a random uuid session is created and placed in a random
+  room; from then on every line the client sends is run through the
+  CommandRunner and the result written back. See `command_structure.md`.
+- Still no login/identity — a `Session` (see `mud/session.py`) is not a
+  Player and isn't tied to a Player row or placed into `World`.
+
+## Commands
+
+- Design spec: `command_structure.md`.
+- `Command` (`mud/commands/command.py`): `match_command(line) -> bool`
+  checks fit without running anything; `run_command(line, session_id) ->
+  str` runs it. (The spec's separate "execute(session_id)" idea got
+  folded into `run_command` taking both the line and the session id,
+  rather than having two methods that both mean "run this".)
+- `CommandRunner` (`mud/commands/runner.py`): tries each command's
+  `match_command` in order, runs the first match, else returns an
+  "Unknown command" string.
+- Implemented: `look` (re-describes the session's current room —
+  needs `SessionRegistry` to know which room that is) and `go` (matches
+  `go ...` but is a stub — returns "lorem ipsum"; real movement needs
+  direction/doorway parsing and `World.move_player`, and that wants an
+  actual Player behind the session).
 
 ## Explicitly out of scope for now
 
 - No theme/setting yet — this is just the engine/world model.
-- No player actions/verbs yet (no "go east", no "pick up item", etc.).
-  Just the data model and whatever scaffolding is needed to load and
-  represent it.
-- No auth/sessions yet — telnet connections are anonymous; they aren't
-  tied to a Player row.
+- Only `look` and a `go` stub exist; no real movement, inventory, or
+  other verbs yet.
+- No auth/sessions yet in the Player sense — a telnet `Session` is
+  anonymous; it isn't tied to a Player row.
 
 ## Status
 
@@ -64,6 +79,7 @@ than gameplay verbs.
 - [x] Player model + Postgres persistence behind a repository interface
 - [x] Room <-> player occupancy sync (`World.place_player`/`move_player`)
 - [x] Telnet server: connect, see a random room, connection stays open
-- [ ] (next) read + dispatch commands from the telnet connection
-- [ ] (later) tie a connection to a Player (auth/session)
+- [x] Command framework (`Command`, `CommandRunner`) + `look` + `go` stub
+- [ ] (next) real `go` (parse direction, use a doorway, `World.move_player`)
+- [ ] (later) tie a session to a Player (auth/login)
 - [ ] (later) theme/content

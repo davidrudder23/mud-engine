@@ -10,3 +10,6 @@ class Item:
     id: str
     name: str
     description: str = ""
+
+    def format(self) -> str:
+        return self.name

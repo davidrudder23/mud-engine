@@ -19,3 +19,6 @@ class Player:
     id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    def format(self) -> str:
+        return self.name

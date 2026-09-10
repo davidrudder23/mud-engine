@@ -37,11 +37,15 @@ Then connect with a telnet client:
 
     telnet localhost 8023
 
-You'll be dropped into a random room and the connection stays open —
-there's no command parsing yet (that's next), so nothing you type does
-anything. Config via env vars: `MUD_TELNET_HOST` (default `127.0.0.1`,
-loopback only — set to `0.0.0.0` to accept connections from other
-machines) and `MUD_TELNET_PORT` (default `8023`).
+You'll be dropped into a random room. Try:
+
+    look        re-describes the room you're in
+    go <dir>    stub for now — always replies "lorem ipsum"
+
+Anything else gets an "Unknown command" reply. Config via env vars:
+`MUD_TELNET_HOST` (default `127.0.0.1`, loopback only — set to
+`0.0.0.0` to accept connections from other machines) and
+`MUD_TELNET_PORT` (default `8023`).
 
 ## Try it
 
@@ -59,6 +63,11 @@ machines) and `MUD_TELNET_PORT` (default `8023`).
       loader.py          JSON -> World
       player.py          Player (dynamic state)
       telnet_server.py   asyncio telnet server (per-connection handler)
+      session.py         Session / SessionRegistry (per-connection state)
+      commands/
+        command.py         Command interface: match_command, run_command
+        runner.py           CommandRunner: dispatches a line to the first match
+        look.py, go.py       command implementations
       db.py              connection pool, env-based config
       repositories/
         player_repository.py            abstract interface

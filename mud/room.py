@@ -21,3 +21,17 @@ class Room:
     # empty even though the JSON file never sets it, and it's only ever
     # mutated via World.place_player / World.move_player, never directly.
     players: list[Player] = field(default_factory=list)
+
+    def format(self) -> str:
+        """Render as telnet-friendly text (CRLF line endings)."""
+        lines = [f"[{self.id}]", self.description]
+
+        if self.items:
+            lines.append("You see:")
+            lines.extend(f"  - {item.format()}" for item in self.items)
+
+        if self.doorways:
+            lines.append("Doorways:")
+            lines.extend(f"  - {doorway.format()}" for doorway in self.doorways)
+
+        return "\r\n".join(lines)
