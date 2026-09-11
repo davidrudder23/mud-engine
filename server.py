@@ -19,7 +19,7 @@ from pathlib import Path
 from mud.loader import load_world
 from mud.telnet_server import DEFAULT_HOST, DEFAULT_PORT, run
 
-WORLD_DIR = Path(__file__).parent / "world" / "rooms"
+WORLD_DIR = Path(__file__).parent / "world"
 
 
 def main() -> None:

@@ -8,18 +8,36 @@ than gameplay verbs.
 
 ## Core concepts
 
-- **Room**: a location the player's character can be in.
+- **Structure**: a building, cavern, or other container that groups
+  rooms together (e.g. "Old Mill"). Has a `name` and `description`.
+  Every room belongs to exactly one structure; a structure can contain
+  many rooms.
+- **Room**: a location the player's character can be in. Belongs to
+  exactly one structure.
   - Has metadata, e.g. a `description`.
   - Has **items** (contents).
   - Has **doorways** connecting it to other rooms.
+  - `Room.format()` lists current occupants ("Players here: ...") too —
+    including the viewer themselves, since `format()` has no notion of
+    who's asking. This is where the duplicate-login quirk (see
+    Networking below) actually becomes visible in play, not just in
+    the data model.
 - **Item**: an object that lives in a room (and presumably can move between
   rooms / into inventory later, but that's not in scope yet).
 - **Doorway**: a connection between two rooms.
 
 ## Data storage
 
-- Room (and related) metadata lives in **JSON files** — the world is
-  authored as data, not code.
+- Structure/room (and related) metadata lives in **JSON files** — the
+  world is authored as data, not code. `world/structures/*.json` and
+  `world/rooms/*.json` (see `mud/loader.py`).
+- Structure <-> room membership is kept in sync the same way as room
+  <-> player occupancy (see below): `World.place_room` /
+  `World.move_room_to_structure` are the only things that should touch
+  `Structure.rooms` or `Room.structure_id`. Unlike player occupancy,
+  this relationship is static content, established once at load time —
+  `move_room_to_structure` exists for symmetry/future use (e.g. a level
+  editor) but nothing currently calls it after loading.
 
 ## Players (multiplayer)
 
@@ -34,18 +52,38 @@ than gameplay verbs.
   (`Room.players`, in-memory only — occupancy doesn't survive a
   restart, `Player.current_room_id` in Postgres does). The two are kept
   from drifting apart by routing every change through `World.place_player`
-  / `World.move_player` — nothing else should touch `Room.players`
-  directly. See `demo_world_players.py`.
+  / `World.move_player` / `World.remove_player` — nothing else should
+  touch `Room.players` directly. See `demo_world_players.py`.
+- **Location lives on the Player, not the Session.** A `Session` (see
+  `mud/session.py`) has a `player`, one-way — a session knows its
+  player, but a player doesn't know its session(s). That's deliberate:
+  the same player *name* can be behind more than one session at once
+  (see Networking below), and there's no reverse list to keep in sync.
+- **`Player` uses identity equality (`@dataclass(eq=False)`), not
+  value equality.** Two Player objects loaded from the same DB row
+  (e.g. two logins under the same name) are never `==` to each other,
+  only to themselves. This is load-bearing, not incidental: without it,
+  `World.place_player`'s `if player not in room.players` check would
+  treat a second login as "already here" and silently drop it instead
+  of adding a second occupant.
 
 ## Networking
 
 - A telnet server (`server.py` / `mud/telnet_server.py`), port 8023 by
   default, since this is meant to feel like an old-school MUD.
-- On connect: a random uuid session is created and placed in a random
-  room; from then on every line the client sends is run through the
-  CommandRunner and the result written back. See `command_structure.md`.
-- Still no login/identity — a `Session` (see `mud/session.py`) is not a
-  Player and isn't tied to a Player row or placed into `World`.
+- On connect: prompts "What is your name?", then `PlayerRepository.get_by_name`
+  (or `create`, if new) gets/creates a Player, `World.place_player` adds
+  it to its room's occupant list, and a `Session` is created around it.
+  Every line the client sends after that goes through the CommandRunner.
+- **Logging in twice under the same name is allowed, on purpose**, and
+  each login gets its own `Session` + its own `Player` *instance*
+  (same underlying DB row, per `get_by_name`) — see the identity-equality
+  note above. The two move independently and can both show up as
+  occupants of the same room at once: one player, apparently in two
+  places, moving on its own in each. That's the intended (if delightfully
+  weird) consequence of the design, not a bug to fix.
+- Still no real auth — whatever name you type, you get (or become)
+  that player. No password, no limit on concurrent sessions per name.
 
 ## Commands
 
@@ -58,28 +96,42 @@ than gameplay verbs.
 - `CommandRunner` (`mud/commands/runner.py`): tries each command's
   `match_command` in order, runs the first match, else returns an
   "Unknown command" string.
-- Implemented: `look` (re-describes the session's current room —
-  needs `SessionRegistry` to know which room that is) and `go` (matches
-  `go ...` but is a stub — returns "lorem ipsum"; real movement needs
-  direction/doorway parsing and `World.move_player`, and that wants an
-  actual Player behind the session).
+- Matching (`matches_verb` in `mud/commands/command.py`): case-insensitive
+  prefix check against the verb, since commands can take parameters
+  ("go east", "look around"). It's a plain prefix, not word-boundary, so
+  e.g. "goblin" also matches "go" — accepted tradeoff, not a bug.
+- Implemented:
+  - `look` — re-describes `session.player`'s current room (via
+    `World.get_room(session.player.current_room_id)`).
+  - `go <dimension>` — moves through a doorway. Looks up the player's
+    current room's doorways for an exact, case-sensitive match on
+    `direction` ("go North" won't match a doorway whose direction is
+    "north"); on a match, calls `World.move_player` (updates
+    `Room.players` on both ends, not just `current_room_id`) and
+    persists the move via `PlayerRepository.save`. No match, or no
+    argument, gets an error string.
+  - `quit` — closes the connection. Commands only return text (no
+    access to the writer), so it works by setting `should_close` on the
+    `Session`; telnet_server's read loop checks that flag after every
+    command and closes if it's set.
 
 ## Explicitly out of scope for now
 
 - No theme/setting yet — this is just the engine/world model.
-- Only `look` and a `go` stub exist; no real movement, inventory, or
-  other verbs yet.
-- No auth/sessions yet in the Player sense — a telnet `Session` is
-  anonymous; it isn't tied to a Player row.
+- Only `look`, `go`, and `quit` exist; no inventory or other verbs yet.
+- No real auth — logging in is just typing a name; no password, no
+  identity verification, no limit on concurrent sessions per name (see
+  Networking above — that last one is deliberate, not a gap).
 
 ## Status
 
 - [x] Define JSON schema for rooms/items/doorways
 - [x] Write loader that reads the JSON world data into in-memory objects
 - [x] Player model + Postgres persistence behind a repository interface
-- [x] Room <-> player occupancy sync (`World.place_player`/`move_player`)
+- [x] Room <-> player occupancy sync (`World.place_player`/`move_player`/`remove_player`)
 - [x] Telnet server: connect, see a random room, connection stays open
-- [x] Command framework (`Command`, `CommandRunner`) + `look` + `go` stub
-- [ ] (next) real `go` (parse direction, use a doorway, `World.move_player`)
-- [ ] (later) tie a session to a Player (auth/login)
+- [x] Command framework (`Command`, `CommandRunner`) + `look` + `go` + `quit`
+- [x] Login (name -> Player), Session tied to Player (not Room);
+      `go`/`look` operate on the player, persisted via `PlayerRepository`
+- [ ] (later) real auth (passwords, etc.) if that ever matters here
 - [ ] (later) theme/content

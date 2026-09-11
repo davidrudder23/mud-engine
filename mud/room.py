@@ -13,6 +13,10 @@ from mud.player import Player
 @dataclass
 class Room:
     id: str
+    # Every room belongs to exactly one structure. Kept in sync with
+    # Structure.rooms via World.place_room / World.move_room_to_structure
+    # — don't set this directly.
+    structure_id: str
     description: str = ""
     items: list[Item] = field(default_factory=list)
     doorways: list[Doorway] = field(default_factory=list)
@@ -29,6 +33,10 @@ class Room:
         if self.items:
             lines.append("You see:")
             lines.extend(f"  - {item.format()}" for item in self.items)
+
+        if self.players:
+            lines.append("Players here:")
+            lines.extend(f"  - {player.format()}" for player in self.players)
 
         if self.doorways:
             lines.append("Doorways:")

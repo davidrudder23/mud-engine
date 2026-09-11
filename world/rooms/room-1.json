@@ -1,5 +1,6 @@
 {
   "id": "room-1",
+  "structure_id": "old-mill",
   "description": "A plain square room with bare stone walls.",
   "items": [
     { "id": "key", "name": "a small brass key", "description": "It's warm to the touch." }

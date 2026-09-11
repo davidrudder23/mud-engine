@@ -15,7 +15,7 @@ from pathlib import Path
 from mud.loader import load_world
 from mud.repositories.postgres_player_repository import PostgresPlayerRepository
 
-WORLD_DIR = Path(__file__).parent / "world" / "rooms"
+WORLD_DIR = Path(__file__).parent / "world"
 
 
 def print_occupancy(world) -> None:

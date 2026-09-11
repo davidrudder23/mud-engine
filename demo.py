@@ -8,7 +8,7 @@ from pathlib import Path
 
 from mud.loader import load_world
 
-WORLD_DIR = Path(__file__).parent / "world" / "rooms"
+WORLD_DIR = Path(__file__).parent / "world"
 
 
 def main() -> None:

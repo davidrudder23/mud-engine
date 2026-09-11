@@ -1,5 +1,6 @@
 {
   "id": "room-2",
+  "structure_id": "old-mill",
   "description": "A narrow hallway that smells faintly of dust.",
   "items": [],
   "doorways": [

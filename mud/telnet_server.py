@@ -1,19 +1,31 @@
 """The telnet server.
 
-On connect: generate a session (random uuid) for the connection and
-place it in a random room. From then on, every line the client sends is
-handed to the CommandRunner, and whatever it returns is written back.
+On connect: ask for a name, get-or-create the matching Player (via
+PlayerRepository), place it in the world, and start a Session tied to
+that Player. From then on, every line the client sends is handed to the
+CommandRunner, and whatever it returns is written back.
+
+Logging in twice under the same name (two connections) is allowed on
+purpose: each gets its own Session and its own Player *instance* for
+the same underlying row (see mud/player.py) — so the same-named player
+can appear twice in a room at once, moving independently. Not a bug.
+
+There's no real auth: whatever name you type, you get (or become) that
+player. No password, no session-per-name limit.
 """
 
 from __future__ import annotations
 
 import asyncio
-import random
 
 from mud.commands.command import Command
 from mud.commands.go import GoCommand
 from mud.commands.look import LookCommand
+from mud.commands.quit import QuitCommand
 from mud.commands.runner import CommandRunner
+from mud.player import Player
+from mud.repositories.player_repository import DuplicatePlayerName, PlayerRepository
+from mud.repositories.postgres_player_repository import PostgresPlayerRepository
 from mud.session import SessionRegistry
 from mud.world import World
 
@@ -21,25 +33,81 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8023
 
 
-def _build_commands(sessions: SessionRegistry) -> list[Command]:
-    return [LookCommand(sessions), GoCommand()]
+def _build_commands(
+    sessions: SessionRegistry, world: World, player_repo: PlayerRepository
+) -> list[Command]:
+    return [
+        LookCommand(sessions, world),
+        GoCommand(sessions, world, player_repo),
+        QuitCommand(sessions),
+    ]
+
+
+def _default_starting_room_id(world: World) -> str:
+    """Arbitrary but deterministic: the first loaded room. There's no
+    "spawn point" concept yet — if the world ever needs one, mark it in
+    JSON rather than relying on load order.
+    """
+    return next(iter(world.rooms.values())).id
+
+
+async def _login(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    world: World,
+    player_repo: PlayerRepository,
+) -> Player | None:
+    """Prompt for a name and return the matching (or newly created)
+    Player, or None if the connection dropped before answering."""
+    writer.write(b"What is your name? ")
+    await writer.drain()
+
+    raw_name = await reader.readline()
+    if not raw_name:
+        return None
+
+    name = raw_name.decode(errors="replace").strip()
+    if not name:
+        name = "adventurer"
+
+    player = player_repo.get_by_name(name)
+    if player is None:
+        try:
+            player = player_repo.create(
+                name, starting_room_id=_default_starting_room_id(world)
+            )
+        except DuplicatePlayerName:
+            # Someone else's login just created it between our check and
+            # our insert -- fetch that row instead of failing.
+            player = player_repo.get_by_name(name)
+
+    return player
 
 
 async def _handle_client(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     world: World,
+    player_repo: PlayerRepository,
     sessions: SessionRegistry,
     command_runner: CommandRunner,
 ) -> None:
     peer = writer.get_extra_info("peername")
     print(f"Connection from {peer}", flush=True)
 
-    room = random.choice(list(world.rooms.values()))
-    session = sessions.create(room)
-
+    session = None
     try:
-        writer.write((room.format() + "\r\n").encode())
+        player = await _login(reader, writer, world, player_repo)
+        if player is None:
+            return  # disconnected before giving a name
+
+        world.place_player(player)
+        session = sessions.create(player)
+
+        room = world.get_room(player.current_room_id)
+        writer.write(
+            (f"Welcome, {player.name}!\r\n\r\n" + room.format() + "\r\n").encode()
+        )
         await writer.drain()
 
         while True:
@@ -54,13 +122,18 @@ async def _handle_client(
             response = command_runner.run(line, session.id)
             writer.write((response + "\r\n").encode())
             await writer.drain()
+
+            if session.should_close:
+                break
     except (ConnectionError, asyncio.IncompleteReadError, ValueError):
         # ValueError: readline() hit its buffer limit without finding a
         # newline (asyncio.LimitOverrunError surfaces as ValueError here) —
         # treat it like any other client-caused disconnect.
         pass
     finally:
-        sessions.remove(session.id)
+        if session is not None:
+            world.remove_player(session.player)
+            sessions.remove(session.id)
         print(f"Connection closed: {peer}", flush=True)
         writer.close()
         try:
@@ -71,10 +144,11 @@ async def _handle_client(
 
 async def run(world: World, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
     sessions = SessionRegistry()
-    command_runner = CommandRunner(_build_commands(sessions))
+    player_repo = PostgresPlayerRepository()
+    command_runner = CommandRunner(_build_commands(sessions, world, player_repo))
 
     server = await asyncio.start_server(
-        lambda r, w: _handle_client(r, w, world, sessions, command_runner),
+        lambda r, w: _handle_client(r, w, world, player_repo, sessions, command_runner),
         host,
         port,
     )
