@@ -113,6 +113,13 @@ fake repository (`test/fakes.py`), not `PostgresPlayerRepository`.
 
     python3 -m unittest discover -v
 
+One test, `test/test_llm_integration.py`, makes a real call to the
+configured LLM to confirm actual connectivity (network, API key, model
+name all correct together) — unlike every other test here, which is
+offline. It auto-skips if no API key is configured; fill one in (see
+LLM setup above) to have it actually run, and note it'll spend a small
+number of tokens each time you run the suite.
+
 ## Structure (of the code)
 
     src/
