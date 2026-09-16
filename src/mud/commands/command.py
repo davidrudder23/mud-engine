@@ -20,15 +20,19 @@ that apply where the player currently stands. For now every command
 returns True unconditionally — nothing yet restricts a command to
 certain rooms — so this is a stub until that becomes real.
 
-`parameters()` is step one of moving command matching off of
-`matches_verb`'s plain prefix check and onto an LLM (see mud/llm/):
-before a line can be handed to a model and matched to a command with
-its arguments extracted, each command has to say, explicitly, what
-arguments it takes -- a name, a type, and whether it's required. That's
-what `Parameter` and `parameters()` are for. Nothing consumes this yet
-(`run_command` still parses `line` by hand with `command_argument`) --
-this just makes each command's expected input a real, inspectable
-value instead of something only implied by its `run_command` body.
+`parameters()` -- together with `name()` and `describe()` -- is what
+moves command matching off of `matches_verb`'s plain prefix check and
+onto an LLM (see commands/llm_runner.py): before a line can be handed
+to a model and matched to a command with its arguments extracted, each
+command has to say, explicitly, what it's called, what it does, and
+what arguments it takes -- a name, a type, and whether it's required.
+`run_command` itself is unchanged by this -- it still parses `line` by
+hand with `command_argument`/`matches_verb`. LLMCommandRunner works
+around that rather than through it: once it has a command name and
+parameter values from the model, it reconstructs a normalized line
+(e.g. "go north") and calls the matched command's own `run_command`
+with that, so every command's existing argument parsing keeps working
+unmodified either way.
 """
 
 from __future__ import annotations
@@ -59,6 +63,14 @@ class Parameter:
 
 
 class Command(ABC):
+    @abstractmethod
+    def name(self) -> str:
+        """This command's canonical verb, e.g. "go" or "pick up". Used
+        both for matching (matches_verb(line, self.name())) and as the
+        stable identifier LLMCommandRunner matches the model's reply
+        against -- unlike `describe()`, meant to be read by a player,
+        this is meant to be matched by code."""
+
     @abstractmethod
     def match_command(self, line: str) -> bool:
         """Return whether this command handles `line`. Must not run it."""

@@ -29,8 +29,11 @@ class GoCommand(Command):
         self._world = world
         self._player_repo = player_repo
 
+    def name(self) -> str:
+        return "go"
+
     def match_command(self, line: str) -> bool:
-        return matches_verb(line, "go")
+        return matches_verb(line, self.name())
 
     def match_room(self, room: Room) -> bool:
         return True

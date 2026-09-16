@@ -15,8 +15,11 @@ from mud.room import Room
 
 
 class OrderCommand(Command):
+    def name(self) -> str:
+        return "order"
+
     def match_command(self, line: str) -> bool:
-        return matches_verb(line, "order")
+        return matches_verb(line, self.name())
 
     def match_room(self, room: Room) -> bool:
         return True

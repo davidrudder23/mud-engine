@@ -36,8 +36,11 @@ class HelpCommand(Command):
         self._world = world
         self._commands = commands
 
+    def name(self) -> str:
+        return "help"
+
     def match_command(self, line: str) -> bool:
-        return matches_verb(line, "help")
+        return matches_verb(line, self.name())
 
     def match_room(self, room: Room) -> bool:
         return True

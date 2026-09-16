@@ -19,8 +19,11 @@ class QuitCommand(Command):
     def __init__(self, sessions: SessionRegistry) -> None:
         self._sessions = sessions
 
+    def name(self) -> str:
+        return "quit"
+
     def match_command(self, line: str) -> bool:
-        return matches_verb(line, "quit")
+        return matches_verb(line, self.name())
 
     def match_room(self, room: Room) -> bool:
         return True

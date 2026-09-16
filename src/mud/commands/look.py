@@ -24,8 +24,11 @@ class LookCommand(Command):
         self._sessions = sessions
         self._world = world
 
+    def name(self) -> str:
+        return "look"
+
     def match_command(self, line: str) -> bool:
-        return matches_verb(line, "look")
+        return matches_verb(line, self.name())
 
     def match_room(self, room: Room) -> bool:
         return True

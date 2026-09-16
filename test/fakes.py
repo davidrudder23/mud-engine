@@ -18,6 +18,11 @@ without opening a real socket.
 FakeAnthropicClient stands in for anthropic.Anthropic itself (injected
 via AnthropicLLMClient's `client=` parameter), so mud.llm tests never
 make a real network call or need a real API key.
+
+FakeLLMClient is a level higher: it implements LLMClient itself, for
+tests of code that *calls* complete() (LLMCommandRunner) rather than
+tests of complete()'s own implementation (that's what
+FakeAnthropicClient/test_llm.py are for).
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+from mud.llm.llm_client import LLMClient
 from mud.player import Player
 from mud.repositories.player_repository import DuplicatePlayerName, PlayerRepository
 
@@ -155,3 +161,25 @@ class FakeAnthropicClient:
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text=self.reply)]
         )
+
+
+class FakeLLMClient(LLMClient):
+    """A scripted LLMClient: `reply` is either a fixed string returned
+    for every call, or a callable `(prompt, system) -> str` for tests
+    that need the reply to depend on the input. Raises `error` instead,
+    if given, to exercise callers' error handling. Records every call's
+    (prompt, system) in `.calls`.
+    """
+
+    def __init__(self, reply: str | object = "", *, error: Exception | None = None) -> None:
+        self.reply = reply
+        self.error = error
+        self.calls: list[dict] = []
+
+    def complete(self, prompt: str, *, system: str | None = None) -> str:
+        self.calls.append({"prompt": prompt, "system": system})
+        if self.error is not None:
+            raise self.error
+        if callable(self.reply):
+            return self.reply(prompt, system)
+        return self.reply
