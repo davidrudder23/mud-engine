@@ -18,8 +18,10 @@ present instead of adding it.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+
+from mud.item import Item
 
 
 @dataclass(eq=False)
@@ -29,6 +31,17 @@ class Player:
     id: uuid.UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    # What this player is carrying. Like Room.players, this is live,
+    # in-memory state, not persisted to the players table -- picking
+    # something up only lasts for the session, same as items aren't
+    # otherwise mutable/persisted at all yet (see PickUpCommand).
+    inventory: list[Item] = field(default_factory=list)
 
     def format(self) -> str:
         return self.name
+
+    def get_commands(self) -> list[str]:
+        """Verbs this player's presence makes available, for `look`'s
+        "you can try" hint. Nothing yet (no talk/attack/etc.), so this
+        is always empty for now."""
+        return []

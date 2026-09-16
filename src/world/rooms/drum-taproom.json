@@ -1,0 +1,16 @@
+{
+  "id": "drum-taproom",
+  "structure_id": "mended-drum",
+  "description": "A long, smoke-stained taproom where the furniture has been broken and mended so many times it now qualifies as a repeat offender. A knife is stuck in the bar for reasons the staff have stopped explaining.",
+  "items": [
+    { "id": "tankard", "name": "a half-finished tankard", "description": "Best not to ask who finished the other half." }
+  ],
+  "doorways": [
+    { "direction": "west", "to": "watch-front-desk", "description": "A shortcut through an alley toward Pseudopolis Yard." },
+    { "direction": "north", "to": "drum-back-room", "description": "A curtained doorway, unusually quiet behind it." },
+    { "direction": "east", "to": "drum-kitchen", "description": "A door that swings both ways, mostly because it's missing a latch." },
+    { "direction": "down", "to": "drum-cellar", "description": "A trapdoor behind the bar, propped open with a chair leg." },
+    { "direction": "up", "to": "drum-upstairs", "description": "A narrow staircase, several steps of which are only theoretical." }
+  ],
+  "commands": ["order drink"]
+}

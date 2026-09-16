@@ -1,0 +1,9 @@
+{
+  "id": "drum-cellar",
+  "structure_id": "mended-drum",
+  "description": "Barrels of something calling itself 'wine' sit stacked beside crates of a beer so strong it appears to have its own gravitational pull. A rat regards you with more confidence than the situation warrants.",
+  "items": [],
+  "doorways": [
+    { "direction": "up", "to": "drum-taproom", "description": "Back up through the trapdoor." }
+  ]
+}

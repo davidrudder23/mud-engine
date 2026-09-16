@@ -23,13 +23,18 @@ Room file, e.g. rooms/cave-entrance.json:
       ],
       "doorways": [
         {"direction": "north", "to": "cave-tunnel", "description": "A narrow passage."}
-      ]
+      ],
+      "commands": ["light torch"]
     }
 
 `id` and `structure_id` are required; everything else defaults to
 empty. Doorway `to` values and room `structure_id` values are both
 validated once every file has been read, so files can reference each
 other regardless of load order.
+
+`commands` is a plain list of extra verb strings for Room.get_commands()
+-- a room-specific, JSON-configured addition to the verbs the code
+already derives from the room's doorways/items/players (see room.py).
 """
 
 from __future__ import annotations
@@ -101,6 +106,7 @@ def _room_from_dict(data: dict, *, source: Path) -> Room:
         description=data.get("description", ""),
         items=items,
         doorways=doorways,
+        commands=data.get("commands", []),
     )
 
 

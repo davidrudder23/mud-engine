@@ -1,0 +1,11 @@
+{
+  "id": "watch-armory",
+  "structure_id": "pseudopolis-yard",
+  "description": "Racks of pikes and crossbows line the walls, alongside a single, suspiciously well-maintained halberd that nobody on the roster remembers issuing.",
+  "items": [
+    { "id": "halberd", "name": "a well-oiled halberd", "description": "It's the only weapon in the room that looks like it's ever been cleaned." }
+  ],
+  "doorways": [
+    { "direction": "east", "to": "watch-muster-room", "description": "Back to the muster room." }
+  ]
+}

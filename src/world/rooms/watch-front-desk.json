@@ -1,0 +1,11 @@
+{
+  "id": "watch-front-desk",
+  "structure_id": "pseudopolis-yard",
+  "description": "A high, ink-stained desk piled with incident reports, most involving the word 'dragon' in some capacity. A hand-lettered sign warns: NO SWORDS, AXES, OR ANNOYING QUESTIONS BEYOND THIS POINT.",
+  "items": [],
+  "doorways": [
+    { "direction": "west", "to": "uu-gate", "description": "A grimy street back toward Unseen University." },
+    { "direction": "east", "to": "drum-taproom", "description": "A shortcut through an alley toward the sound of breaking furniture." },
+    { "direction": "north", "to": "watch-muster-room", "description": "Through a low doorway into the muster room." }
+  ]
+}

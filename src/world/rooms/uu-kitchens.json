@@ -1,0 +1,11 @@
+{
+  "id": "uu-kitchens",
+  "structure_id": "unseen-university",
+  "description": "Enormous pots bubble over open flame, tended by a cook who stopped being surprised by hungry wizards at three in the morning several decades ago.",
+  "items": [
+    { "id": "cheese-wheel", "name": "an entire wheel of cheese", "description": "Someone has already cut a slice that is, itself, the size of a normal cheese." }
+  ],
+  "doorways": [
+    { "direction": "west", "to": "uu-great-hall", "description": "Back to the Great Hall." }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "uu-hex-room",
+  "structure_id": "unseen-university",
+  "description": "A vast, wheezing contraption of glass tubing, ant colonies, and suspicious dripping dominates the room. It hums with a magic that firmly believes itself to be a machine.",
+  "items": [
+    { "id": "ant-colony", "name": "a jar of extremely agitated ants", "description": "They appear to be running some kind of calculation." }
+  ],
+  "doorways": [
+    { "direction": "east", "to": "uu-library", "description": "Back to the Library." }
+  ],
+  "commands": ["poke ants"]
+}

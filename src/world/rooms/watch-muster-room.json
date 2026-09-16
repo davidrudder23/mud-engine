@@ -1,0 +1,14 @@
+{
+  "id": "watch-muster-room",
+  "structure_id": "pseudopolis-yard",
+  "description": "Rows of battered lockers stand beneath a duty roster scrawled in several different, increasingly irritated handwritings. Someone has pinned up a wanted poster that is unmistakably a self-portrait.",
+  "items": [
+    { "id": "duty-roster", "name": "a much-amended duty roster", "description": "Several names have been crossed out and replaced with the word 'promoted', suspiciously often." }
+  ],
+  "doorways": [
+    { "direction": "south", "to": "watch-front-desk", "description": "Back to the front desk." },
+    { "direction": "north", "to": "watch-captains-office", "description": "A door marked CAPTAIN. KNOCK. THIS MEANS YOU." },
+    { "direction": "east", "to": "watch-holding-cells", "description": "A short corridor lined with iron bars." },
+    { "direction": "west", "to": "watch-armory", "description": "A reinforced door, slightly dented from the inside." }
+  ]
+}

@@ -25,6 +25,14 @@ class Room:
     # empty even though the JSON file never sets it, and it's only ever
     # mutated via World.place_player / World.move_player, never directly.
     players: list[Player] = field(default_factory=list)
+    # Extra verbs authored directly on the room in JSON ("commands":
+    # [...]), on top of whatever get_commands() derives from the room's
+    # own content below. This is the second, configurable way to make a
+    # command show up in a room, alongside the code-driven defaults
+    # (always "look", "go" when there's a doorway, and whatever items/
+    # players contribute) -- deliberately two ways to define one, so a
+    # one-off room can offer a verb without a matching item/player.
+    commands: list[str] = field(default_factory=list)
 
     def format(self) -> str:
         """Render as telnet-friendly text (CRLF line endings)."""
@@ -43,3 +51,27 @@ class Room:
             lines.extend(f"  - {doorway.format()}" for doorway in self.doorways)
 
         return "\r\n".join(lines)
+
+    def get_commands(self) -> list[str]:
+        """Verbs available in this room right now, for `look`'s "you can
+        try" hint: always "look"; "go" if there's a doorway; whatever
+        the items and players present each contribute; plus whatever
+        this room's JSON authored directly onto `commands`. Deduplicated,
+        order preserved (e.g. two items both offering "pick up", or a
+        JSON "commands" entry repeating a default, shouldn't list it
+        twice).
+        """
+        commands = ["look"]
+
+        if self.doorways:
+            commands.append("go")
+
+        for item in self.items:
+            commands.extend(item.get_commands())
+
+        for player in self.players:
+            commands.extend(player.get_commands())
+
+        commands.extend(self.commands)
+
+        return list(dict.fromkeys(commands))

@@ -1,0 +1,11 @@
+{
+  "id": "drum-back-room",
+  "structure_id": "mended-drum",
+  "description": "A private room reserved for card games, quiet business arrangements, and at least one ongoing feud that has outlasted several changes of management.",
+  "items": [
+    { "id": "marked-deck", "name": "a suspiciously marked deck of cards", "description": "Every card in it appears to be the ace of clubs, if you look closely enough." }
+  ],
+  "doorways": [
+    { "direction": "south", "to": "drum-taproom", "description": "Back to the taproom." }
+  ]
+}

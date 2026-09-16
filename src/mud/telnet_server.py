@@ -19,8 +19,12 @@ from __future__ import annotations
 import asyncio
 
 from mud.commands.command import Command
+from mud.commands.drop import DropCommand
 from mud.commands.go import GoCommand
+from mud.commands.help import HelpCommand
 from mud.commands.look import LookCommand
+from mud.commands.order import OrderCommand
+from mud.commands.pick_up import PickUpCommand
 from mud.commands.quit import QuitCommand
 from mud.commands.runner import CommandRunner
 from mud.player import Player
@@ -36,11 +40,20 @@ DEFAULT_PORT = 8023
 def _build_commands(
     sessions: SessionRegistry, world: World, player_repo: PlayerRepository
 ) -> list[Command]:
-    return [
+    commands: list[Command] = [
         LookCommand(sessions, world),
         GoCommand(sessions, world, player_repo),
         QuitCommand(sessions),
+        PickUpCommand(sessions, world),
+        DropCommand(sessions, world),
+        OrderCommand(),
     ]
+    # HelpCommand lists `commands` at run time, after this function has
+    # returned and the list below is complete -- appending itself last
+    # (into the same list it was handed) is what makes `help` list
+    # itself too.
+    commands.append(HelpCommand(sessions, world, commands))
+    return commands
 
 
 def _default_starting_room_id(world: World) -> str:
@@ -80,6 +93,13 @@ async def _login(
             # Someone else's login just created it between our check and
             # our insert -- fetch that row instead of failing.
             player = player_repo.get_by_name(name)
+
+    if player.current_room_id not in world.rooms:
+        # The world changed since this player last saved (e.g. the map
+        # was redone) and their room no longer exists. Send them back to
+        # the default start rather than crashing the login.
+        player.current_room_id = _default_starting_room_id(world)
+        player_repo.save(player)
 
     return player
 

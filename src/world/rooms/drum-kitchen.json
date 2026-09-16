@@ -1,0 +1,9 @@
+{
+  "id": "drum-kitchen",
+  "structure_id": "mended-drum",
+  "description": "A cramped kitchen turning out food of questionable origin and unquestionable quantity, presided over by a cook who has never once washed her hands and never once made anyone sick, either.",
+  "items": [],
+  "doorways": [
+    { "direction": "west", "to": "drum-taproom", "description": "Back to the taproom." }
+  ]
+}

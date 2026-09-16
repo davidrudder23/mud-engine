@@ -1,0 +1,10 @@
+{
+  "id": "uu-gate",
+  "structure_id": "unseen-university",
+  "description": "A pair of tall iron gates stand ajar beneath a crest so overgrown with ivy that the University's motto has been reduced to something about lunch. The stonework leans at an angle the architects insist was intentional.",
+  "items": [],
+  "doorways": [
+    { "direction": "north", "to": "uu-great-hall", "description": "A gravel path leads up to the University's main doors." },
+    { "direction": "east", "to": "watch-front-desk", "description": "A grimy street winds off toward Pseudopolis Yard." }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "watch-captains-office",
+  "structure_id": "pseudopolis-yard",
+  "description": "A cluttered office where the paperwork has achieved a kind of structural independence from the desk it originated on. A mug of something the colour of regret sits within arm's reach of every chair.",
+  "items": [
+    { "id": "cold-tea", "name": "a mug of stone-cold tea", "description": "It has been stone cold for so long it may have achieved a kind of permanence." }
+  ],
+  "doorways": [
+    { "direction": "south", "to": "watch-muster-room", "description": "Back to the muster room." }
+  ]
+}

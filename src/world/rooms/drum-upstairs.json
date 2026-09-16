@@ -1,0 +1,9 @@
+{
+  "id": "drum-upstairs",
+  "structure_id": "mended-drum",
+  "description": "A narrow hallway of guest rooms above the taproom, where the floorboards creak out warnings the walls are too thin to bother with.",
+  "items": [],
+  "doorways": [
+    { "direction": "down", "to": "drum-taproom", "description": "Back down to the taproom." }
+  ]
+}
