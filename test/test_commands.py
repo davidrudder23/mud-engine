@@ -14,12 +14,16 @@ from mud.commands.order import OrderCommand
 from mud.commands.pick_up import PickUpCommand
 from mud.commands.quit import QuitCommand
 from mud.commands.runner import CommandRunner
+from mud.commands.talk import TalkCommand
 from mud.item import Item
+from mud.llm.config import LLMConfigError
+from mud.llm.llm_client import LLMRequestError
+from mud.npc import NPC
 from mud.player import Player
 from mud.room import Room
 from mud.session import SessionRegistry
 
-from test.fakes import FakePlayerRepository
+from test.fakes import FakeLLMClient, FakePlayerRepository
 from test.helpers import build_two_room_world
 
 
@@ -79,6 +83,40 @@ class CommandTestCase(unittest.TestCase):
         self.player = self.repo.create("alice", starting_room_id=self.start_id)
         self.world.place_player(self.player)
         self.session = self.sessions.create(self.player)
+
+
+class BuildLineTests(CommandTestCase):
+    """Command.build_line(): reconstructing a line from a command name +
+    parameter values, for anything that doesn't get one already typed
+    (LLMCommandRunner, the MCP server)."""
+
+    def test_no_parameter_command_is_just_its_name(self) -> None:
+        command = LookCommand(self.sessions, self.world)
+        self.assertEqual(command.build_line({}), "look")
+
+    def test_appends_a_present_parameter_value(self) -> None:
+        command = GoCommand(self.sessions, self.world, self.repo)
+        self.assertEqual(command.build_line({"direction": "north"}), "go north")
+
+    def test_multi_word_verb_is_preserved(self) -> None:
+        command = PickUpCommand(self.sessions, self.world)
+        self.assertEqual(command.build_line({"item": "rusty sword"}), "pick up rusty sword")
+
+    def test_missing_parameter_is_just_omitted(self) -> None:
+        command = GoCommand(self.sessions, self.world, self.repo)
+        self.assertEqual(command.build_line({}), "go")
+
+    def test_undeclared_parameters_are_ignored(self) -> None:
+        command = GoCommand(self.sessions, self.world, self.repo)
+        result = command.build_line({"direction": "north", "speed": "fast"})
+        self.assertEqual(result, "go north")
+
+    def test_round_trips_through_run_command(self) -> None:
+        command = GoCommand(self.sessions, self.world, self.repo)
+        line = command.build_line({"direction": "north"})
+        result = command.run_command(line, self.session.id)
+        self.assertEqual(self.player.current_room_id, self.north_id)
+        self.assertEqual(result, self.world.get_room(self.north_id).format())
 
 
 class LookCommandTests(CommandTestCase):
@@ -387,9 +425,104 @@ class OrderCommandTests(CommandTestCase):
         self.assertIn("drink", result)
 
 
+class TalkCommandTests(CommandTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.room = self.world.get_room(self.start_id)
+        self.llm = FakeLLMClient(reply="Welcome, traveler.")
+        self.command = TalkCommand(
+            self.sessions, self.world, get_llm_client=lambda: self.llm
+        )
+
+    def test_takes_one_required_string_parameter(self) -> None:
+        self.assertEqual(
+            self.command.parameters(), [Parameter(name="npc", type=str, required=True)]
+        )
+
+    def test_matches_talk_and_only_talk(self) -> None:
+        self.assertTrue(self.command.match_command("talk old tom"))
+        self.assertTrue(self.command.match_command("talk to old tom"))
+        self.assertFalse(self.command.match_command("look"))
+
+    def test_no_npc_given(self) -> None:
+        result = self.command.run_command("talk", self.session.id)
+        self.assertEqual(result, "Talk to whom?")
+
+    def test_npc_not_present(self) -> None:
+        result = self.command.run_command("talk old tom", self.session.id)
+        self.assertEqual(result, "You don't see 'old tom' here.")
+
+    def test_matches_npc_by_id(self) -> None:
+        self.room.npcs.append(NPC(id="old-tom", name="Old Tom"))
+        result = self.command.run_command("talk old-tom", self.session.id)
+        self.assertEqual(result, "Old Tom says: Welcome, traveler.")
+
+    def test_matches_npc_by_name_substring_case_insensitive_with_to_prefix(self) -> None:
+        self.room.npcs.append(NPC(id="old-tom", name="Old Tom"))
+        result = self.command.run_command("talk to TOM", self.session.id)
+        self.assertEqual(result, "Old Tom says: Welcome, traveler.")
+
+    def test_sends_npc_identity_as_system_prompt(self) -> None:
+        self.room.npcs.append(
+            NPC(id="old-tom", name="Old Tom", description="A grizzled bartender.")
+        )
+        self.command.run_command("talk to tom", self.session.id)
+
+        self.assertEqual(len(self.llm.calls), 1)
+        system = self.llm.calls[0]["system"]
+        self.assertIn("Old Tom", system)
+        self.assertIn("A grizzled bartender.", system)
+
+    def test_llm_client_is_built_lazily_and_only_once(self) -> None:
+        self.room.npcs.append(NPC(id="old-tom", name="Old Tom"))
+        build_count = 0
+
+        def get_llm_client():
+            nonlocal build_count
+            build_count += 1
+            return self.llm
+
+        command = TalkCommand(self.sessions, self.world, get_llm_client=get_llm_client)
+        self.assertEqual(build_count, 0)  # not built until actually used
+
+        command.run_command("talk tom", self.session.id)
+        command.run_command("talk tom", self.session.id)
+
+        self.assertEqual(build_count, 1)  # built once, then reused
+
+    def test_llm_request_error_falls_back_gracefully(self) -> None:
+        self.room.npcs.append(NPC(id="old-tom", name="Old Tom"))
+        command = TalkCommand(
+            self.sessions,
+            self.world,
+            get_llm_client=lambda: FakeLLMClient(error=LLMRequestError("down")),
+        )
+        result = command.run_command("talk tom", self.session.id)
+        self.assertEqual(result, "Old Tom doesn't seem to hear you.")
+
+    def test_llm_config_error_is_not_cached_and_is_retried_next_call(self) -> None:
+        self.room.npcs.append(NPC(id="old-tom", name="Old Tom"))
+        attempts = [LLMConfigError("no api key"), self.llm]
+
+        def get_llm_client():
+            result = attempts.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        command = TalkCommand(self.sessions, self.world, get_llm_client=get_llm_client)
+
+        first = command.run_command("talk tom", self.session.id)
+        self.assertEqual(first, "Old Tom doesn't seem to hear you.")
+
+        second = command.run_command("talk tom", self.session.id)
+        self.assertEqual(second, "Old Tom says: Welcome, traveler.")
+
+
 class CommandRunnerTests(CommandTestCase):
     def setUp(self) -> None:
         super().setUp()
+        self.llm = FakeLLMClient(reply="Welcome, traveler.")
         commands = [
             LookCommand(self.sessions, self.world),
             GoCommand(self.sessions, self.world, self.repo),
@@ -397,6 +530,7 @@ class CommandRunnerTests(CommandTestCase):
             PickUpCommand(self.sessions, self.world),
             DropCommand(self.sessions, self.world),
             OrderCommand(),
+            TalkCommand(self.sessions, self.world, get_llm_client=lambda: self.llm),
         ]
         commands.append(HelpCommand(self.sessions, self.world, commands))
         self.runner = CommandRunner(commands)
@@ -410,6 +544,14 @@ class CommandRunnerTests(CommandTestCase):
         self.assertIn("pick up <item>", result)
         self.assertIn("drop <item>", result)
         self.assertIn("order <drink>", result)
+        self.assertIn("talk to <npc>", result)
+
+    def test_dispatches_to_talk(self) -> None:
+        self.world.get_room(self.start_id).npcs.append(NPC(id="old-tom", name="Old Tom"))
+
+        result = self.runner.run("talk to old tom", self.session.id)
+
+        self.assertEqual(result, "Old Tom says: Welcome, traveler.")
 
     def test_dispatches_to_pick_up(self) -> None:
         room = self.world.get_room(self.start_id)

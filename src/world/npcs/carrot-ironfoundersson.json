@@ -1,0 +1,11 @@
+{
+  "id": "carrot-ironfoundersson",
+  "name": "Carrot Ironfoundersson",
+  "description": "Improbably tall, disarmingly earnest, and armed with a sword that has clearly seen real use. He remembers everyone's name, believes fervently in the letter of the law, and somehow makes that charming instead of exhausting. Raised by dwarfs, which he will mention if given even the slightest opening.",
+  "type": "wandering",
+  "move_interval": 120,
+  "commands": ["salute"],
+  "inventory": [
+    { "id": "badge", "name": "a City Watch badge", "description": "Polished to a shine that borders on the aggressive." }
+  ]
+}

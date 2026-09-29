@@ -145,12 +145,24 @@ class FakeAnthropicClient:
     Records every call's kwargs in `.calls`, for asserting on what
     AnthropicLLMClient.complete() actually sent. Returns a `reply` as a
     single text content block by default, or raises `error` if one was
-    given (to exercise the LLMRequestError-wrapping path).
+    given (to exercise the LLMRequestError-wrapping path). Also returns
+    a `usage` with `input_tokens`/`output_tokens`, matching a real
+    response's shape -- defaults to 0/0, override via the constructor
+    to test what AnthropicLLMClient.complete() does with real counts.
     """
 
-    def __init__(self, *, reply: str = "", error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        reply: str = "",
+        error: Exception | None = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
         self.reply = reply
         self.error = error
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
         self.calls: list[dict] = []
         self.messages = self
 
@@ -159,7 +171,10 @@ class FakeAnthropicClient:
         if self.error is not None:
             raise self.error
         return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text=self.reply)]
+            content=[SimpleNamespace(type="text", text=self.reply)],
+            usage=SimpleNamespace(
+                input_tokens=self.input_tokens, output_tokens=self.output_tokens
+            ),
         )
 
 

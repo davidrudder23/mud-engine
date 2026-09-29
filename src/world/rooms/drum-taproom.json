@@ -12,5 +12,6 @@
     { "direction": "down", "to": "drum-cellar", "description": "A trapdoor behind the bar, propped open with a chair leg." },
     { "direction": "up", "to": "drum-upstairs", "description": "A narrow staircase, several steps of which are only theoretical." }
   ],
+  "npcs": ["tavern-keeper"],
   "commands": ["order drink"]
 }

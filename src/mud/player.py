@@ -40,6 +40,15 @@ class Player:
     def format(self) -> str:
         return self.name
 
+    def to_dict(self) -> dict:
+        """JSON-serializable snapshot, for the MCP server (see
+        mcp_server.py) -- the structured counterpart to format()."""
+        return {
+            "id": str(self.id) if self.id is not None else None,
+            "name": self.name,
+            "inventory": [item.to_dict() for item in self.inventory],
+        }
+
     def get_commands(self) -> list[str]:
         """Verbs this player's presence makes available, for `look`'s
         "you can try" hint. Nothing yet (no talk/attack/etc.), so this

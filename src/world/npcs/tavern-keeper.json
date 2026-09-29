@@ -1,0 +1,9 @@
+{
+  "id": "tavern-keeper",
+  "name": "Grubb",
+  "description": "A barrel-chested bartender who's broken up more fights than he's started, and only slightly prouder of that than he lets on. Gruff but not unkind to anyone who isn't currently on fire or throwing a punch.",
+  "commands": ["trade"],
+  "inventory": [
+    { "id": "bar-rag", "name": "a bar rag", "description": "Damp, gray, and older than some of the regulars." }
+  ]
+}

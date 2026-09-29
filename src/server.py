@@ -13,24 +13,35 @@ Config via env vars:
 """
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
 from mud.loader import load_world
+from mud.logging_config import configure_logging
 from mud.telnet_server import DEFAULT_HOST, DEFAULT_PORT, run
 
 WORLD_DIR = Path(__file__).parent / "world"
 
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    configure_logging()
+
     world = load_world(WORLD_DIR)
+    logger.info(
+        "Loaded world: %d structures, %d rooms, %d npcs",
+        len(world.structures), len(world.rooms), len(world.npcs),
+    )
+
     host = os.environ.get("MUD_TELNET_HOST", DEFAULT_HOST)
     port = int(os.environ.get("MUD_TELNET_PORT", DEFAULT_PORT))
 
     try:
         asyncio.run(run(world, host, port))
     except KeyboardInterrupt:
-        pass
+        logger.info("Shutting down (KeyboardInterrupt)")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+# Holds a real API key once you fill it in -- see src/mud/llm/config.py
+llm.config.json
+
+__pycache__/
+*.py[cod]

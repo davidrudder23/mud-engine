@@ -18,11 +18,14 @@ that scales towards that without adding real complexity now.
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.pool
+
+logger = logging.getLogger(__name__)
 
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
 
@@ -46,7 +49,13 @@ def _config() -> dict:
 def get_pool() -> psycopg2.pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = psycopg2.pool.ThreadedConnectionPool(1, 10, **_config())
+        config = _config()
+        _pool = psycopg2.pool.ThreadedConnectionPool(1, 10, **config)
+        # host/port/dbname only -- never log user/password.
+        logger.info(
+            "Created DB connection pool: dbname=%s host=%s port=%s",
+            config.get("dbname"), config.get("host", "<unix socket>"), config.get("port", "<default>"),
+        )
     return _pool
 
 
@@ -58,7 +67,8 @@ def get_connection():
     try:
         yield conn
         conn.commit()
-    except Exception:
+    except Exception as exc:
+        logger.warning("DB operation failed, rolling back: %s", exc)
         conn.rollback()
         raise
     finally:

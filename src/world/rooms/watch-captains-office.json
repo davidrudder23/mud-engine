@@ -7,5 +7,6 @@
   ],
   "doorways": [
     { "direction": "south", "to": "watch-muster-room", "description": "Back to the muster room." }
-  ]
+  ],
+  "npcs": ["carrot-ironfoundersson"]
 }

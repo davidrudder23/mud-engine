@@ -14,3 +14,8 @@ class Doorway:
     def format(self) -> str:
         suffix = f" ({self.description})" if self.description else ""
         return f"{self.direction}{suffix}"
+
+    def to_dict(self) -> dict:
+        """JSON-serializable snapshot, for the MCP server (see
+        mcp_server.py) -- the structured counterpart to format()."""
+        return {"direction": self.direction, "to": self.to, "description": self.description}

@@ -14,6 +14,11 @@ class Item:
     def format(self) -> str:
         return self.name
 
+    def to_dict(self) -> dict:
+        """JSON-serializable snapshot, for the MCP server (see
+        mcp_server.py) -- the structured counterpart to format()."""
+        return {"id": self.id, "name": self.name, "description": self.description}
+
     def get_commands(self) -> list[str]:
         """Verbs this item makes available, for `look`'s "you can try"
         hint. Every item can be picked up, so this is constant for now —

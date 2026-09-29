@@ -12,11 +12,18 @@ is swapped for FakePlayerRepository so no database is required either.
 
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from mud.session import SessionRegistry
-from mud.telnet_server import _build_commands, _handle_client, _login
+from mud.commands.llm_runner import LLMCommandRunner
 from mud.commands.runner import CommandRunner
+from mud.llm import config
+from mud.llm.config import LLMConfigError
+from mud.session import SessionRegistry
+from mud.telnet_server import _build_command_runner, _build_commands, _handle_client, _login
 
 from test.fakes import FakePlayerRepository, FakeStreamReader, FakeStreamWriter
 from test.helpers import build_two_room_world
@@ -175,6 +182,128 @@ class StaleRoomOnLoginTests(TelnetServerTestCase):
 
         saved = self.repo.get_by_id(ghost.id)
         self.assertEqual(saved.current_room_id, default_room_id)
+
+
+class LoggingTests(TelnetServerTestCase):
+    """Login, command-issued, and logout log records -- the three
+    things explicitly asked for, plus the stale-room-reset and
+    connection-error records covered by their own dedicated tests."""
+
+    async def test_login_and_command_and_logout_are_logged(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client(_lines("alice", "look", "quit"))
+
+        joined = "\n".join(cm.output)
+        self.assertIn("Login: player=alice", joined)
+        self.assertIn("Command: session=", joined)
+        self.assertIn("player=alice line='look'", joined)
+        self.assertIn("Logout: session=", joined)
+        self.assertIn("player=alice", joined)
+        self.assertIn("reason=quit", joined)
+
+    async def test_every_command_line_gets_its_own_log_record(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client(_lines("alice", "look", "go north", "quit"))
+
+        command_records = [r for r in cm.output if "Command: " in r]
+        self.assertEqual(len(command_records), 3)
+        self.assertIn("line='look'", command_records[0])
+        self.assertIn("line='go north'", command_records[1])
+        self.assertIn("line='quit'", command_records[2])
+
+    async def test_blank_lines_are_not_logged_as_commands(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client(_lines("alice", "", "   ", "look", "quit"))
+
+        # Only "look" and "quit" are real command lines -- the blank
+        # ones in between must not add extra records.
+        command_records = [r for r in cm.output if "Command: " in r]
+        self.assertEqual(len(command_records), 2)
+
+    async def test_disconnect_without_quit_is_logged_with_that_reason(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client(_lines("alice", "look"))  # no quit -- just EOF
+
+        joined = "\n".join(cm.output)
+        self.assertIn("Logout:", joined)
+        self.assertIn("reason=disconnect", joined)
+
+    async def test_connection_error_is_logged_with_that_reason(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="WARNING") as cm:
+            await self.run_client(
+                _lines("alice", "look"), raise_after=ValueError("line too long")
+            )
+
+        joined = "\n".join(cm.output)
+        self.assertIn("Connection error", joined)
+        self.assertIn("line too long", joined)
+
+    async def test_new_vs_existing_player_is_distinguished_in_the_login_log(self) -> None:
+        self.repo.create("alice", starting_room_id=self.start_id)
+
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client(_lines("alice", "quit"))
+
+        joined = "\n".join(cm.output)
+        self.assertIn("Login: player=alice new_player=False", joined)
+
+    async def test_stale_room_reset_is_logged(self) -> None:
+        self.repo.create("bob", starting_room_id="a-room-that-got-deleted")
+
+        with self.assertLogs("mud.telnet_server", level="WARNING") as cm:
+            await self.run_client(_lines("bob", "quit"))
+
+        joined = "\n".join(cm.output)
+        self.assertIn("saved room", joined)
+        self.assertIn("no longer exists", joined)
+
+    async def test_no_login_log_when_connection_drops_before_a_name_is_given(self) -> None:
+        with self.assertLogs("mud.telnet_server", level="INFO") as cm:
+            await self.run_client([])  # EOF immediately
+
+        joined = "\n".join(cm.output)
+        self.assertNotIn("Login:", joined)
+        self.assertNotIn("Logout:", joined)
+        self.assertIn("Connection opened", joined)
+        self.assertIn("Connection closed", joined)
+
+
+class BuildCommandRunnerTests(TelnetServerTestCase):
+    """_build_command_runner's MUD_COMMAND_MATCHING switch. Points
+    mud.llm.config.CONFIG_FILE at a scratch path that doesn't exist, so
+    these never read the real llm.config.json in the project root."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        patcher = patch.object(config, "CONFIG_FILE", Path(tmpdir.name) / "llm.config.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_defaults_to_command_runner(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            runner = _build_command_runner(self.sessions, self.world, self.repo)
+        self.assertIsInstance(runner, CommandRunner)
+
+    def test_llm_matching_env_var_selects_llm_command_runner(self) -> None:
+        env = {"MUD_COMMAND_MATCHING": "llm", "MUD_LLM_API_KEY": "sk-test"}
+        with patch.dict(os.environ, env, clear=True):
+            runner = _build_command_runner(self.sessions, self.world, self.repo)
+        self.assertIsInstance(runner, LLMCommandRunner)
+
+    def test_llm_matching_is_case_and_whitespace_insensitive(self) -> None:
+        env = {"MUD_COMMAND_MATCHING": "  LLM  ", "MUD_LLM_API_KEY": "sk-test"}
+        with patch.dict(os.environ, env, clear=True):
+            runner = _build_command_runner(self.sessions, self.world, self.repo)
+        self.assertIsInstance(runner, LLMCommandRunner)
+
+    def test_llm_matching_without_api_key_raises_at_startup(self) -> None:
+        # Fails fast when the server starts, rather than on the first
+        # line a player types.
+        with patch.dict(os.environ, {"MUD_COMMAND_MATCHING": "llm"}, clear=True):
+            with self.assertRaises(LLMConfigError):
+                _build_command_runner(self.sessions, self.world, self.repo)
 
 
 if __name__ == "__main__":

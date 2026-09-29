@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 import anthropic
 
 from mud.llm.config import CONFIG_FILE, LLMConfigError, setting
@@ -12,6 +15,8 @@ from mud.llm.llm_client import LLMClient, LLMRequestError
 # default; override with MUD_LLM_MODEL for a larger model if needed.
 DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_MAX_TOKENS = 1024
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicLLMClient(LLMClient):
@@ -39,6 +44,7 @@ class AnthropicLLMClient(LLMClient):
         if system:
             kwargs["system"] = system
 
+        started = time.monotonic()
         try:
             response = self._client.messages.create(
                 model=self._model,
@@ -47,7 +53,23 @@ class AnthropicLLMClient(LLMClient):
                 **kwargs,
             )
         except anthropic.AnthropicError as e:
+            logger.warning(
+                "LLM call failed: model=%s elapsed_ms=%.0f error=%s",
+                self._model, (time.monotonic() - started) * 1000, e,
+            )
             raise LLMRequestError(f"Anthropic request failed: {e}") from e
+
+        # `usage` is present on every real Anthropic response, but this
+        # is read defensively (getattr, not response.usage.input_tokens
+        # directly) in case a future SDK response or a test double omits
+        # it -- "if possible" per the ask, not "must always be there".
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "input_tokens", None)
+        output_tokens = getattr(usage, "output_tokens", None)
+        logger.info(
+            "LLM call: model=%s input_tokens=%s output_tokens=%s elapsed_ms=%.0f",
+            self._model, input_tokens, output_tokens, (time.monotonic() - started) * 1000,
+        )
 
         return "".join(
             block.text for block in response.content if block.type == "text"

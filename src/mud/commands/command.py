@@ -27,11 +27,13 @@ to a model and matched to a command with its arguments extracted, each
 command has to say, explicitly, what it's called, what it does, and
 what arguments it takes -- a name, a type, and whether it's required.
 `run_command` itself is unchanged by this -- it still parses `line` by
-hand with `command_argument`/`matches_verb`. LLMCommandRunner works
-around that rather than through it: once it has a command name and
-parameter values from the model, it reconstructs a normalized line
-(e.g. "go north") and calls the matched command's own `run_command`
-with that, so every command's existing argument parsing keeps working
+hand with `command_argument`/`matches_verb`. LLMCommandRunner (and the
+MCP server; see mcp_server.py) work around that rather than through it:
+once either has a command name and parameter values from somewhere
+other than a typed line (a model's JSON reply, an MCP tool call's
+arguments), `build_line` reconstructs a normalized line (e.g.
+"go north") and calls the matched command's own `run_command` with
+that, so every command's existing argument parsing keeps working
 unmodified either way.
 """
 
@@ -92,6 +94,28 @@ class Command(ABC):
     @abstractmethod
     def run_command(self, line: str, session_id: uuid.UUID) -> str:
         """Run this command and return the text to show the player."""
+
+    def build_line(self, parameters: dict[str, str]) -> str:
+        """Rebuild a line `run_command` can parse itself, from parameter
+        values keyed by name (e.g. {"direction": "north"} -> "go north"
+        for GoCommand). A parameter missing from the dict is just
+        omitted -- run_command already prompts for what's missing (e.g.
+        "go" alone -> "Go where?").
+
+        For anything that gets a command + parameter values from
+        somewhere other than a typed line, rather than each
+        reimplementing "verb + args" reconstruction: LLMCommandRunner
+        (from a model's JSON reply; see commands/llm_runner.py) and the
+        MCP server (from a tool call's arguments; see mcp_server.py)
+        both go through this. Concrete, not abstract -- it's the same
+        for every command, built entirely from name()/parameters().
+        """
+        parts = [self.name()]
+        for parameter in self.parameters():
+            value = parameters.get(parameter.name)
+            if value:
+                parts.append(str(value))
+        return " ".join(parts)
 
 
 def matches_verb(line: str, verb: str) -> bool:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from mud.npc import NPC
 from mud.player import Player
 from mud.room import Room
 from mud.structure import Structure
@@ -14,6 +15,11 @@ from mud.structure import Structure
 class World:
     rooms: dict[str, Room] = field(default_factory=dict)
     structures: dict[str, Structure] = field(default_factory=dict)
+    # NPC *definitions* (templates), one per npcs/*.json id -- not the
+    # NPCs actually standing in rooms. Those are separate NPC.spawn()
+    # instances living in each Room.npcs (see room.py/npc.py); a
+    # definition here can back any number of them.
+    npcs: dict[str, NPC] = field(default_factory=dict)
 
     def get_room(self, room_id: str) -> Room:
         try:
@@ -26,6 +32,16 @@ class World:
             return self.structures[structure_id]
         except KeyError:
             raise KeyError(f"No such structure: {structure_id!r}") from None
+
+    def get_npc(self, npc_id: str) -> NPC:
+        """The NPC *definition* for `npc_id` (see the `npcs` field
+        above) -- not a specific room's spawned instance. Look up a
+        live NPC standing in a room via that room's own `npcs` list
+        instead (e.g. TalkCommand does, by id/name substring)."""
+        try:
+            return self.npcs[npc_id]
+        except KeyError:
+            raise KeyError(f"No such npc: {npc_id!r}") from None
 
     def place_room(self, room: Room) -> None:
         """Add a room to its structure's room list.
@@ -97,6 +113,26 @@ class World:
         room = self.rooms.get(player.current_room_id)
         if room is not None and player in room.players:
             room.players.remove(player)
+
+    def move_npc(self, npc: NPC, to_room_id: str) -> None:
+        """Move an already-spawned NPC to a different room.
+
+        Mirrors move_player exactly, for the same reason: this is the
+        *only* thing that should change which room an NPC is in -- it
+        updates npc.room_id and both rooms' `npcs` lists together, so
+        the two can never drift out of sync. Don't append/remove an NPC
+        from room.npcs directly. Used by mud/npc_patrol.py to move a
+        WanderingNPC; nothing stops it being used for other NPC
+        movement later (a fleeing enemy, a patrol route, ...).
+        """
+        new_room = self.get_room(to_room_id)  # validate before mutating anything
+
+        old_room = self.rooms.get(npc.room_id) if npc.room_id is not None else None
+        if old_room is not None and npc in old_room.npcs:
+            old_room.npcs.remove(npc)
+
+        new_room.npcs.append(npc)
+        npc.room_id = to_room_id
 
     def __iter__(self):
         return iter(self.rooms.values())

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import unittest
 
+from mud.npc import NPC
 from mud.player import Player
 from mud.structure import Structure
 from mud.world import World
@@ -141,6 +142,41 @@ class MovePlayerTests(unittest.TestCase):
 
         self.assertEqual(player.current_room_id, north_id)
         self.assertIn(player, world.get_room(north_id).players)
+
+
+class MoveNpcTests(unittest.TestCase):
+    """move_npc mirrors move_player -- these mirror MovePlayerTests."""
+
+    def test_move_npc_updates_both_rooms_and_room_id(self) -> None:
+        world, start_id, north_id = build_two_room_world()
+        npc = NPC(id="old-tom", name="Old Tom", room_id=start_id)
+        world.get_room(start_id).npcs.append(npc)
+
+        world.move_npc(npc, north_id)
+
+        self.assertEqual(npc.room_id, north_id)
+        self.assertNotIn(npc, world.get_room(start_id).npcs)
+        self.assertIn(npc, world.get_room(north_id).npcs)
+
+    def test_move_npc_unknown_destination_raises_and_does_not_mutate(self) -> None:
+        world, start_id, _ = build_two_room_world()
+        npc = NPC(id="old-tom", name="Old Tom", room_id=start_id)
+        world.get_room(start_id).npcs.append(npc)
+
+        with self.assertRaises(KeyError):
+            world.move_npc(npc, "nowhere")
+
+        self.assertEqual(npc.room_id, start_id)
+        self.assertIn(npc, world.get_room(start_id).npcs)
+
+    def test_move_npc_not_previously_placed_still_lands_in_new_room(self) -> None:
+        world, _, north_id = build_two_room_world()
+        npc = NPC(id="old-tom", name="Old Tom")  # room_id=None, never placed
+
+        world.move_npc(npc, north_id)
+
+        self.assertEqual(npc.room_id, north_id)
+        self.assertIn(npc, world.get_room(north_id).npcs)
 
 
 class RemovePlayerTests(unittest.TestCase):

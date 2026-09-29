@@ -178,6 +178,49 @@ class AnthropicLLMClientCompleteTests(IsolatedConfigTestCase):
             client.complete("go north")
 
 
+class AnthropicLLMClientLoggingTests(IsolatedConfigTestCase):
+    def test_successful_call_is_logged_with_token_counts(self) -> None:
+        fake = FakeAnthropicClient(reply="ok", input_tokens=42, output_tokens=7)
+        client = AnthropicLLMClient(client=fake)
+
+        with self.assertLogs("mud.llm.anthropic_llm_client", level="INFO") as cm:
+            client.complete("go north")
+
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn("LLM call", cm.output[0])
+        self.assertIn("input_tokens=42", cm.output[0])
+        self.assertIn("output_tokens=7", cm.output[0])
+        self.assertIn(f"model={DEFAULT_MODEL}", cm.output[0])
+
+    def test_missing_usage_logs_none_instead_of_crashing(self) -> None:
+        # A response with no `usage` at all (a future SDK change, or a
+        # different provider's client one day) -- "if possible" per the
+        # ask, so this must degrade gracefully rather than raise.
+        fake = FakeAnthropicClient(reply="ok")
+        fake.create = lambda **kwargs: SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="ok")]
+        )
+        client = AnthropicLLMClient(client=fake)
+
+        with self.assertLogs("mud.llm.anthropic_llm_client", level="INFO") as cm:
+            result = client.complete("go north")
+
+        self.assertEqual(result, "ok")
+        self.assertIn("input_tokens=None", cm.output[0])
+        self.assertIn("output_tokens=None", cm.output[0])
+
+    def test_failed_call_is_logged_as_a_warning(self) -> None:
+        fake = FakeAnthropicClient(error=anthropic.AnthropicError("rate limited"))
+        client = AnthropicLLMClient(client=fake)
+
+        with self.assertLogs("mud.llm.anthropic_llm_client", level="WARNING") as cm:
+            with self.assertRaises(LLMRequestError):
+                client.complete("go north")
+
+        self.assertIn("LLM call failed", cm.output[0])
+        self.assertIn("rate limited", cm.output[0])
+
+
 class GetLLMClientTests(IsolatedConfigTestCase):
     def test_default_provider_is_anthropic(self) -> None:
         with patch.dict(os.environ, {"MUD_LLM_API_KEY": "sk-test"}, clear=True):
