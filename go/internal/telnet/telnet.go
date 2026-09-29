@@ -1,0 +1,347 @@
+// Package telnet is the telnet server.
+//
+// On connect: ask for a name, get-or-create the matching Player (via
+// PlayerRepository), place it in the world, and start a Session tied to
+// that Player. From then on, every line the client sends is handed to
+// the command runner, and whatever it returns is written back.
+//
+// Logging in twice under the same name (two connections) is allowed on
+// purpose: each gets its own Session and its own *Player for the same
+// underlying row -- so the same-named player can appear twice in a room
+// at once, moving independently. There's no real auth: whatever name
+// you type, you get (or become) that player.
+//
+// Two command-matching strategies are available -- CommandRunner (plain
+// verb prefix check) and LLMCommandRunner (an LLM decides which command
+// a line invokes and extracts its parameters). Which one BuildRunner
+// builds is controlled by MUD_COMMAND_MATCHING: "verb" (default) or
+// "llm". LLM matching needs a configured LLM client -- BuildRunner
+// fails immediately at startup if one isn't set up, rather than on the
+// first line someone types.
+//
+// Concurrency: each connection and each wandering NPC runs in its own
+// goroutine, and they all share the world. Server.Lock is the one game
+// lock around every world access -- placing/removing a player, running
+// a command, moving an NPC -- so the game logic itself stays
+// single-threaded. Commands run under it end to end, including any LLM
+// call or DB save they make, which serializes those across players;
+// fine at this scale, and the obvious thing to revisit if it isn't.
+package telnet
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"strings"
+	"sync"
+
+	"mudengine/internal/commands"
+	"mudengine/internal/llm"
+	"mudengine/internal/logging"
+	"mudengine/internal/npcpatrol"
+	"mudengine/internal/repository"
+	"mudengine/internal/session"
+	"mudengine/internal/world"
+)
+
+const (
+	DefaultHost = "127.0.0.1"
+	DefaultPort = 8023
+	// Longest line a client may send before being disconnected.
+	maxLineBytes = 64 * 1024
+)
+
+var logger = logging.For("mud.telnet")
+
+// BuildRunner builds every command (commands.BuildAll) and the runner
+// MUD_COMMAND_MATCHING selects.
+func BuildRunner(sessions *session.Registry, w *world.World, players repository.PlayerRepository) (commands.Runner, error) {
+	all := commands.BuildAll(sessions, w, players, nil)
+	matching := strings.ToLower(strings.TrimSpace(os.Getenv("MUD_COMMAND_MATCHING")))
+	if matching == "llm" {
+		client, err := llm.GetClient()
+		if err != nil {
+			return nil, err
+		}
+		logger.Info("Command matching", "mode", "llm")
+		return commands.NewLLMCommandRunner(client, all), nil
+	}
+	logger.Info("Command matching", "mode", "verb")
+	return commands.NewCommandRunner(all), nil
+}
+
+// DefaultStartingRoomID is arbitrary but deterministic: the first
+// loaded room. There's no "spawn point" concept yet -- if the world
+// ever needs one, mark it in JSON rather than relying on load order.
+func DefaultStartingRoomID(w *world.World) string {
+	return w.Rooms()[0].ID
+}
+
+// ResolvePlayer gets the Player named name, creating one (starting in
+// the default room) if none exists yet. Also resets CurrentRoomID (and
+// persists that) if it points at a room the current world no longer
+// has -- e.g. the map was redone since this player last saved.
+//
+// Shared with the MCP server, which gets its player's name from config
+// instead of prompting, so both get identical get-or-create and
+// stale-room handling.
+func ResolvePlayer(ctx context.Context, w *world.World, players repository.PlayerRepository, name string) (*world.Player, error) {
+	player, err := players.GetByName(ctx, name)
+	isNew := errors.Is(err, repository.ErrNotFound)
+	if isNew {
+		player, err = players.Create(ctx, name, DefaultStartingRoomID(w))
+		if errors.Is(err, repository.ErrDuplicatePlayerName) {
+			// Someone else's login just created it between our check
+			// and our insert -- fetch that row instead of failing.
+			logger.Info("Duplicate-name race on create; using the existing row", "player", name)
+			player, err = players.GetByName(ctx, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if !w.HasRoom(player.CurrentRoomID) {
+		// The world changed since this player last saved and their room
+		// no longer exists. Send them back to the default start rather
+		// than failing the login.
+		stale := player.CurrentRoomID
+		player.CurrentRoomID = DefaultStartingRoomID(w)
+		if err := players.Save(ctx, player); err != nil {
+			return nil, err
+		}
+		logger.Warn("Player's saved room no longer exists; reset",
+			"player", name, "saved_room", stale, "room", player.CurrentRoomID)
+	}
+
+	logger.Info("Login", "player", name, "new_player", isNew, "room", player.CurrentRoomID)
+	return player, nil
+}
+
+// Server holds everything connections share.
+type Server struct {
+	World    *world.World
+	Players  repository.PlayerRepository
+	Sessions *session.Registry
+	Runner   commands.Runner
+	// The game lock -- see the package doc.
+	Lock *sync.Mutex
+}
+
+// lineReader reads CR/LF-terminated lines, capped at maxLineBytes.
+type lineReader struct {
+	scanner *bufio.Scanner
+}
+
+func newLineReader(r io.Reader) *lineReader {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 4096), maxLineBytes)
+	return &lineReader{scanner: scanner}
+}
+
+// readLine returns the next line with surrounding whitespace trimmed
+// and invalid UTF-8 replaced, or io.EOF once the client has
+// disconnected.
+func (r *lineReader) readLine() (string, error) {
+	if !r.scanner.Scan() {
+		if err := r.scanner.Err(); err != nil {
+			return "", err
+		}
+		return "", io.EOF
+	}
+	return strings.TrimSpace(strings.ToValidUTF8(r.scanner.Text(), "�")), nil
+}
+
+// login prompts for a name and returns the matching (or newly created)
+// Player, or nil if the connection dropped before answering.
+func (s *Server) login(ctx context.Context, lines *lineReader, conn io.Writer) (*world.Player, error) {
+	if _, err := io.WriteString(conn, "What is your name? "); err != nil {
+		return nil, err
+	}
+	name, err := lines.readLine()
+	if errors.Is(err, io.EOF) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if name == "" {
+		name = "adventurer"
+	}
+	return ResolvePlayer(ctx, s.World, s.Players, name)
+}
+
+// HandleClient runs one connection from login to disconnect, and
+// always closes conn.
+func (s *Server) HandleClient(ctx context.Context, conn io.ReadWriteCloser, peer string) {
+	logger.Info("Connection opened", "peer", peer)
+	defer func() {
+		conn.Close()
+		logger.Info("Connection closed", "peer", peer)
+	}()
+
+	var sess *session.Session
+	reason := "disconnect" // client EOF, the common case
+	defer func() {
+		if sess == nil {
+			return
+		}
+		s.Lock.Lock()
+		s.World.RemovePlayer(sess.Player)
+		room := sess.Player.CurrentRoomID
+		s.Lock.Unlock()
+		s.Sessions.Remove(sess.ID)
+		logger.Info("Logout", "session", sess.ID, "player", sess.Player.Name, "reason", reason, "room", room)
+	}()
+
+	err := s.serve(ctx, conn, &sess, &reason)
+	if err != nil {
+		reason = "error"
+		logger.Warn("Connection error", "peer", peer, "error", err)
+	}
+}
+
+// serve is HandleClient's login + command loop. It sets *sess once the
+// player is placed (so HandleClient can clean up) and *reason to "quit"
+// if the player quits.
+func (s *Server) serve(ctx context.Context, conn io.ReadWriter, sess **session.Session, reason *string) error {
+	lines := newLineReader(conn)
+
+	player, err := s.login(ctx, lines, conn)
+	if err != nil || player == nil {
+		return err // nil player: disconnected before giving a name
+	}
+
+	s.Lock.Lock()
+	err = s.World.PlacePlayer(player)
+	var welcome string
+	if err == nil {
+		*sess = s.Sessions.Create(player)
+		var room *world.Room
+		if room, err = s.World.GetRoom(player.CurrentRoomID); err == nil {
+			welcome = fmt.Sprintf("Welcome, %s!\r\n\r\n%s\r\n", player.Name, room.Format())
+		}
+	}
+	s.Lock.Unlock()
+	if err != nil {
+		return err
+	}
+	logger.Info("Session started", "session", (*sess).ID, "player", player.Name, "room", player.CurrentRoomID)
+
+	if _, err := io.WriteString(conn, welcome); err != nil {
+		return err
+	}
+
+	for {
+		line, err := lines.readLine()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if line == "" {
+			continue
+		}
+
+		logger.Info("Command", "session", (*sess).ID, "player", player.Name, "line", line)
+		s.Lock.Lock()
+		response, err := s.Runner.Run(ctx, line, (*sess).ID)
+		s.Lock.Unlock()
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(conn, response+"\r\n"); err != nil {
+			return err
+		}
+
+		if (*sess).ShouldClose {
+			*reason = "quit"
+			return nil
+		}
+	}
+}
+
+// startWanderingNPCs starts one npcpatrol.RunForever goroutine per
+// wandering NPC currently placed in the world, all stopped by ctx.
+func startWanderingNPCs(ctx context.Context, w *world.World, lock sync.Locker, wg *sync.WaitGroup) {
+	count := 0
+	for _, room := range w.Rooms() {
+		for _, npc := range room.NPCs {
+			if !npc.IsWandering() {
+				continue
+			}
+			count++
+			wg.Go(func() { npcpatrol.RunForever(ctx, w, npc, lock) })
+		}
+	}
+	if count > 0 {
+		logger.Info("Started wandering NPC goroutines", "count", count)
+	}
+}
+
+// Run serves telnet on host:port until ctx is cancelled.
+func Run(ctx context.Context, w *world.World, players repository.PlayerRepository, host string, port int) error {
+	sessions := session.NewRegistry()
+	runner, err := BuildRunner(sessions, w, players)
+	if err != nil {
+		return err
+	}
+	server := &Server{World: w, Players: players, Sessions: sessions, Runner: runner, Lock: &sync.Mutex{}}
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(host, fmt.Sprint(port)))
+	if err != nil {
+		return err
+	}
+	logger.Info("MUD telnet server listening", "addr", listener.Addr().String())
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	startWanderingNPCs(ctx, w, server.Lock, &wg)
+
+	// Closing the listener is what unblocks Accept on shutdown; open
+	// connections are closed too, so their read loops end.
+	var (
+		connsMu sync.Mutex
+		conns   = map[net.Conn]bool{}
+	)
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+		connsMu.Lock()
+		for conn := range conns {
+			conn.Close()
+		}
+		connsMu.Unlock()
+	}()
+
+	var acceptErr error
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if ctx.Err() == nil {
+				acceptErr = err
+				cancel()
+			}
+			break
+		}
+		connsMu.Lock()
+		conns[conn] = true
+		connsMu.Unlock()
+		wg.Go(func() {
+			server.HandleClient(ctx, conn, conn.RemoteAddr().String())
+			connsMu.Lock()
+			delete(conns, conn)
+			connsMu.Unlock()
+		})
+	}
+
+	wg.Wait()
+	return acceptErr
+}
