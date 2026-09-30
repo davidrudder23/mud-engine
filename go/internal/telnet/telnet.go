@@ -11,13 +11,11 @@
 // at once, moving independently. There's no real auth: whatever name
 // you type, you get (or become) that player.
 //
-// Two command-matching strategies are available -- CommandRunner (plain
-// verb prefix check) and LLMCommandRunner (an LLM decides which command
-// a line invokes and extracts its parameters). Which one BuildRunner
-// builds is controlled by MUD_COMMAND_MATCHING: "verb" (default) or
-// "llm". LLM matching needs a configured LLM client -- BuildRunner
-// fails immediately at startup if one isn't set up, rather than on the
-// first line someone types.
+// Lines are dispatched by commands.LLMCommandRunner: exact and fuzzy
+// alias matching first, then an LLM for anything those don't place. It
+// needs a configured LLM client -- BuildRunner fails immediately at
+// startup if one isn't set up, rather than on the first line someone
+// types.
 //
 // Concurrency: each connection and each wandering NPC runs in its own
 // goroutine, and they all share the world. Server.Lock is the one game
@@ -35,7 +33,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
 
@@ -58,20 +55,13 @@ const (
 var logger = logging.For("mud.telnet")
 
 // BuildRunner builds every command (commands.BuildAll) and the runner
-// MUD_COMMAND_MATCHING selects.
-func BuildRunner(sessions *session.Registry, w *world.World, players repository.PlayerRepository) (commands.Runner, error) {
-	all := commands.BuildAll(sessions, w, players, nil)
-	matching := strings.ToLower(strings.TrimSpace(os.Getenv("MUD_COMMAND_MATCHING")))
-	if matching == "llm" {
-		client, err := llm.GetClient()
-		if err != nil {
-			return nil, err
-		}
-		logger.Info("Command matching", "mode", "llm")
-		return commands.NewLLMCommandRunner(client, all), nil
+// that dispatches lines to them, using the configured LLM client.
+func BuildRunner(sessions *session.Registry, w *world.World, players repository.PlayerRepository) (*commands.LLMCommandRunner, error) {
+	client, err := llm.GetClient()
+	if err != nil {
+		return nil, err
 	}
-	logger.Info("Command matching", "mode", "verb")
-	return commands.NewCommandRunner(all), nil
+	return commands.NewLLMCommandRunner(client, commands.BuildAll(sessions, w, players, nil)), nil
 }
 
 // DefaultStartingRoomID is arbitrary but deterministic: the first
@@ -127,7 +117,7 @@ type Server struct {
 	World    *world.World
 	Players  repository.PlayerRepository
 	Sessions *session.Registry
-	Runner   commands.Runner
+	Runner   *commands.LLMCommandRunner
 	// The game lock -- see the package doc.
 	Lock *sync.Mutex
 }

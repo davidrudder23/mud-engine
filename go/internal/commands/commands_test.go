@@ -529,14 +529,19 @@ func TestTalkUnexpectedErrorIsReturned(t *testing.T) {
 	}
 }
 
-func runnerFixture(t *testing.T) (*fixture, *CommandRunner) {
+// runnerFixture is a runner over every command whose LLM answers "no
+// command" to anything that reaches it -- so a line only runs a command
+// if local (exact/fuzzy) matching places it. The returned fake records
+// whether the LLM was asked. talk gets its own fake, for its greetings.
+func runnerFixture(t *testing.T) (*fixture, *LLMCommandRunner, *llmtest.FakeClient) {
 	f := newFixture(t)
-	fake := &llmtest.FakeClient{Reply: "Welcome, traveler."}
-	all := BuildAll(f.sessions, f.world, f.repo, func() (llm.Client, error) { return fake, nil })
-	return f, NewCommandRunner(all)
+	talkLLM := &llmtest.FakeClient{Reply: "Welcome, traveler."}
+	all := BuildAll(f.sessions, f.world, f.repo, func() (llm.Client, error) { return talkLLM, nil })
+	matcher := &llmtest.FakeClient{Reply: `{"command": null, "parameters": {}}`}
+	return f, NewLLMCommandRunner(matcher, all), matcher
 }
 
-func (f *fixture) runLine(t *testing.T, r Runner, line string) string {
+func (f *fixture) runLine(t *testing.T, r *LLMCommandRunner, line string) string {
 	t.Helper()
 	out, err := r.Run(context.Background(), line, f.session.ID)
 	if err != nil {
@@ -545,8 +550,8 @@ func (f *fixture) runLine(t *testing.T, r Runner, line string) string {
 	return out
 }
 
-func TestCommandRunnerDispatch(t *testing.T) {
-	f, runner := runnerFixture(t)
+func TestRunnerDispatchesLocallyMatchedLines(t *testing.T) {
+	f, runner, matcher := runnerFixture(t)
 	start := f.room(worldtest.StartID)
 	start.Items = append(start.Items, &world.Item{ID: "rock", Name: "a rock"})
 	f.addTom("")
@@ -556,8 +561,6 @@ func TestCommandRunnerDispatch(t *testing.T) {
 		{"pick up rock", "You pick up a rock."},
 		{"drop rock", "You drop a rock."},
 		{"talk to old tom", "Old Tom says: Welcome, traveler."},
-		{"dance", "Unknown command: 'dance'"},
-		{"  dance  ", "Unknown command: 'dance'"},
 	}
 	for _, tt := range tests {
 		if out := f.runLine(t, runner, tt.line); out != tt.want {
@@ -566,6 +569,22 @@ func TestCommandRunnerDispatch(t *testing.T) {
 	}
 	if out := f.runLine(t, runner, "order drink"); !strings.Contains(out, "drink") {
 		t.Errorf("order: %q", out)
+	}
+	if len(matcher.Calls) != 0 {
+		t.Errorf("LLM asked about locally matched lines: %v", matcher.Calls)
+	}
+}
+
+func TestRunnerAsksTheLLMOnlyWhenNothingMatchesLocally(t *testing.T) {
+	f, runner, matcher := runnerFixture(t)
+
+	for _, line := range []string{"dance", "  dance  "} {
+		if out := f.runLine(t, runner, line); out != "Unknown command: 'dance'" {
+			t.Errorf("%q: got %q", line, out)
+		}
+	}
+	if len(matcher.Calls) != 2 || matcher.Calls[0].Prompt != "dance" {
+		t.Errorf("LLM calls = %v, want one per unmatched line", matcher.Calls)
 	}
 }
 
@@ -635,13 +654,16 @@ func TestFuzzyMatchAlias(t *testing.T) {
 	}
 }
 
-func TestCommandRunnerFuzzyMatching(t *testing.T) {
-	f, runner := runnerFixture(t)
+func TestRunnerFuzzyMatching(t *testing.T) {
+	f, runner, _ := runnerFixture(t)
 	start := f.room(worldtest.StartID)
 	start.Items = append(start.Items, &world.Item{ID: "rock", Name: "a rock"})
 
+	// Lines expected to be Unknown reach the fake LLM, which answers
+	// "no command" -- so they prove local matching rejected them.
 	tests := []struct{ line, want string }{
 		{"lok", LookText(start)},                // look, 1 edit
+		{"looi", LookText(start)},               // look, 1 edit
 		{"pcik up rock", "You pick up a rock."}, // pick up, 2 edits
 		{"drp rock", "You drop a rock."},        // drop, 1 edit
 		{"ordr ale", "You order ale. It's set down in front of you without much ceremony."},
@@ -683,12 +705,12 @@ func (c fakeCommand) RunCommand(_ context.Context, line string, _ uuid.UUID) (st
 	return c.Name(), nil
 }
 
-func TestCommandRunnerPassOrder(t *testing.T) {
+func TestRunnerPassOrder(t *testing.T) {
 	var ran string
 	// 5 letters each, so both get the full 2 edits.
 	first := fakeCommand{verbs: verbs{"abcde"}, ran: &ran}
 	second := fakeCommand{verbs: verbs{"abcdf"}, ran: &ran}
-	runner := NewCommandRunner([]Command{first, second})
+	runner := NewLLMCommandRunner(&llmtest.FakeClient{Err: errors.New("LLM should not be asked")}, []Command{first, second})
 	run := func(line string) string {
 		out, err := runner.Run(context.Background(), line, uuid.Nil)
 		if err != nil {
@@ -712,8 +734,8 @@ func TestCommandRunnerPassOrder(t *testing.T) {
 	}
 }
 
-func TestCommandRunnerHelpListsEveryCommand(t *testing.T) {
-	f, runner := runnerFixture(t)
+func TestRunnerHelpListsEveryCommand(t *testing.T) {
+	f, runner, _ := runnerFixture(t)
 	out := f.runLine(t, runner, "help")
 	for _, want := range []string{"look", "go <dir>", "quit", "help", "pick up <item>", "drop <item>", "order <drink>", "talk to <npc>"} {
 		if !strings.Contains(out, want) {

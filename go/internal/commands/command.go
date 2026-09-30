@@ -1,6 +1,7 @@
 // Package commands holds everything a player can type: the Command
-// interface, one implementation per verb, and the two runners that
-// dispatch a line to one (plain verb-prefix matching, or an LLM).
+// interface, one implementation per verb, and LLMCommandRunner, which
+// dispatches a typed line to one (exact and fuzzy alias matching first,
+// then an LLM).
 //
 // A command knows whether a line of input is meant for it
 // (MatchCommand -- a check only, it doesn't run anything) and how to

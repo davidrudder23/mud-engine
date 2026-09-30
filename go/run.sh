@@ -4,4 +4,4 @@
 set -e
 cd "$(dirname "$0")/.."
 go build -C go -o bin/ ./cmd/server
-MUD_COMMAND_MATCHING=llm exec go/bin/server
+exec go/bin/server

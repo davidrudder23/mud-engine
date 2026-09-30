@@ -2,7 +2,7 @@ package commands
 
 import "strings"
 
-// MaxFuzzyDistance is the largest edit distance CommandRunner ever
+// MaxFuzzyDistance is the largest edit distance LLMCommandRunner ever
 // tolerates between a typed verb and an alias; see AllowedDistance for
 // the per-alias limit.
 const MaxFuzzyDistance = 2

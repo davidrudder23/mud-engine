@@ -1,69 +1,47 @@
 package commands
 
 import (
-	"context"
 	"strings"
 
-	"github.com/google/uuid"
-
 	"mudengine/internal/llm"
-	"mudengine/internal/logging"
 	"mudengine/internal/repository"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
-
-var runnerLogger = logging.For("mud.commands.runner")
-
-// Runner dispatches one line of input to a command and returns the
-// text to show the player. CommandRunner and LLMCommandRunner both
-// implement it, so the servers can use either interchangeably.
-type Runner interface {
-	Run(ctx context.Context, line string, sessionID uuid.UUID) (string, error)
-}
 
 // UnknownCommand is the reply for a line no command matches.
 func UnknownCommand(line string) string {
 	return "Unknown command: " + quoted(strings.TrimSpace(line))
 }
 
-// CommandRunner matches a line against known commands and runs
-// whichever matches first. Matching goes in passes, stopping at the
-// first pass where any command matches:
+// matchLocally finds the command line invokes without asking an LLM,
+// returning it and the line to run it with. Matching goes in passes,
+// stopping at the first pass where any command matches:
 //
 //  0. exact: MatchCommand, a verb-prefix check against each alias;
-//  1. fuzzy: an alias within 1 edit of the typed verb (FuzzyMatchAlias);
+//  1. fuzzy: an alias within 1 edit of the typed verb (FuzzyMatchAlias),
+//     run with the typo corrected;
 //  2. fuzzy: within 2 edits (MaxFuzzyDistance).
 //
 // Each alias only takes part in the fuzzy passes its length allows
 // (AllowedDistance: exact only for 1-3 letters, 1 edit for 4, 2 for 5+).
-// No match in any pass is "Unknown command". Within a pass, the
-// earliest command in the list wins.
-type CommandRunner struct {
-	commands []Command
-}
-
-func NewCommandRunner(commands []Command) *CommandRunner {
-	return &CommandRunner{commands: commands}
-}
-
-func (r *CommandRunner) Run(ctx context.Context, line string, sessionID uuid.UUID) (string, error) {
-	for _, command := range r.commands {
+// Within a pass, the earliest command in the list wins.
+func matchLocally(line string, commands []Command) (Command, string, bool) {
+	for _, command := range commands {
 		if command.MatchCommand(line) {
-			return command.RunCommand(ctx, line, sessionID)
+			return command, line, true
 		}
 	}
 	for distance := 1; distance <= MaxFuzzyDistance; distance++ {
-		for _, command := range r.commands {
+		for _, command := range commands {
 			if corrected, ok := FuzzyMatchAlias(line, command.Aliases(), distance); ok {
-				runnerLogger.Debug("Fuzzy-matched command",
+				llmRunnerLogger.Debug("Fuzzy-matched command",
 					"line", line, "command", command.Name(), "corrected", corrected, "distance", distance)
-				return command.RunCommand(ctx, corrected, sessionID)
+				return command, corrected, true
 			}
 		}
 	}
-	runnerLogger.Debug("No command matched", "line", line)
-	return UnknownCommand(line), nil
+	return nil, "", false
 }
 
 // BuildAll builds every command a session gets -- the one list both the

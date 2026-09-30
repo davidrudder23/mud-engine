@@ -21,6 +21,7 @@ import (
 
 	"mudengine/internal/commands"
 	"mudengine/internal/llm"
+	"mudengine/internal/llm/llmtest"
 	"mudengine/internal/logging/logtest"
 	"mudengine/internal/repository/repotest"
 	"mudengine/internal/session"
@@ -79,7 +80,10 @@ func newFixture(t *testing.T) *fixture {
 	w := worldtest.TwoRooms()
 	repo := repotest.New()
 	sessions := session.NewRegistry()
-	runner := commands.NewCommandRunner(commands.BuildAll(sessions, w, repo, nil))
+	// Every line the tests type matches a command locally, except
+	// "dance", which this fake LLM declines to place.
+	matcher := &llmtest.FakeClient{Reply: `{"command": null, "parameters": {}}`}
+	runner := commands.NewLLMCommandRunner(matcher, commands.BuildAll(sessions, w, repo, nil))
 	return &fixture{
 		world:  w,
 		repo:   repo,
@@ -321,38 +325,24 @@ func TestNewPlayerIsFlaggedInLoginLog(t *testing.T) {
 func TestBuildRunner(t *testing.T) {
 	isolateLLMConfig := func(t *testing.T) {
 		t.Setenv("MUD_LLM_CONFIG_FILE", filepath.Join(t.TempDir(), "llm.config.json"))
-		for _, name := range []string{"MUD_LLM_PROVIDER", "MUD_LLM_API_KEY", "MUD_LLM_MODEL", "MUD_COMMAND_MATCHING"} {
+		for _, name := range []string{"MUD_LLM_PROVIDER", "MUD_LLM_API_KEY", "MUD_LLM_MODEL"} {
 			t.Setenv(name, "")
 		}
 	}
-	build := func(t *testing.T) (commands.Runner, error) {
+	build := func(t *testing.T) (*commands.LLMCommandRunner, error) {
 		f := newFixture(t)
 		return BuildRunner(f.server.Sessions, f.world, f.repo)
 	}
 
-	t.Run("defaults to verb matching", func(t *testing.T) {
+	t.Run("builds with an api key", func(t *testing.T) {
 		isolateLLMConfig(t)
-		if runner, err := build(t); err != nil {
-			t.Fatal(err)
-		} else if _, ok := runner.(*commands.CommandRunner); !ok {
-			t.Errorf("got %T", runner)
+		t.Setenv("MUD_LLM_API_KEY", "sk-test")
+		if runner, err := build(t); err != nil || runner == nil {
+			t.Errorf("got %v, %v", runner, err)
 		}
 	})
-	for _, value := range []string{"llm", "  LLM  "} {
-		t.Run("MUD_COMMAND_MATCHING="+value, func(t *testing.T) {
-			isolateLLMConfig(t)
-			t.Setenv("MUD_COMMAND_MATCHING", value)
-			t.Setenv("MUD_LLM_API_KEY", "sk-test")
-			if runner, err := build(t); err != nil {
-				t.Fatal(err)
-			} else if _, ok := runner.(*commands.LLMCommandRunner); !ok {
-				t.Errorf("got %T", runner)
-			}
-		})
-	}
-	t.Run("llm matching without an api key fails at startup", func(t *testing.T) {
+	t.Run("fails at startup without an api key", func(t *testing.T) {
 		isolateLLMConfig(t)
-		t.Setenv("MUD_COMMAND_MATCHING", "llm")
 		if _, err := build(t); !errors.Is(err, llm.ErrConfig) {
 			t.Errorf("got %v, want ErrConfig", err)
 		}

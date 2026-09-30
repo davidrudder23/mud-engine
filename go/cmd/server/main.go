@@ -10,7 +10,8 @@
 //	MUD_WORLD_DIR     default src/world
 //
 // plus MUD_DB_* (internal/db), MUD_LLM_* (internal/llm),
-// MUD_COMMAND_MATCHING (internal/telnet), and MUD_LOG_LEVEL.
+// and MUD_LOG_LEVEL. LLM config is required: every line goes through the
+// LLM command runner (internal/commands).
 package main
 
 import (

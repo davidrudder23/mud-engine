@@ -114,7 +114,7 @@ func TestLLMRunnerIgnoresUndeclaredParameters(t *testing.T) {
 func TestLLMRunnerStripsCodeFence(t *testing.T) {
 	f, fake, runner := llmFixture(t)
 	fake.Reply = "```json\n" + reply("look", nil) + "\n```"
-	if out := f.runLine(t, runner, "look"); !strings.Contains(out, "The starting room.") {
+	if out := f.runLine(t, runner, "peer around"); !strings.Contains(out, "The starting room.") {
 		t.Errorf("got %q", out)
 	}
 }
@@ -126,9 +126,9 @@ func TestLLMRunnerFailuresAreUnknownCommand(t *testing.T) {
 	}{
 		{"null command", reply(nil, nil), "dance", nil},
 		{"hallucinated command", reply("fly", nil), "fly away", nil},
-		{"malformed json", "not json at all", "look", nil},
-		{"non-object json", "[1, 2, 3]", "look", nil},
-		{"request error", "", "look", fmt.Errorf("%w: provider down", llm.ErrRequest)},
+		{"malformed json", "not json at all", "peer around", nil},
+		{"non-object json", "[1, 2, 3]", "peer around", nil},
+		{"request error", "", "peer around", fmt.Errorf("%w: provider down", llm.ErrRequest)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

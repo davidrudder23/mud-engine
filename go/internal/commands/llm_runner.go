@@ -1,26 +1,32 @@
 package commands
 
-// LLMCommandRunner matches a line of input to a command using an
-// llm.Client, instead of CommandRunner's plain verb-prefix check.
+// LLMCommandRunner is how a typed line becomes a command: it
+// dispatches the line to one command and returns the text to show the
+// player.
 //
-// Each command already declares its Name, Describe text, and
-// Parameters. This runner turns that into a system prompt, asks the LLM
-// which command (if any) a line invokes and what values to use for its
-// parameters, then hands off to that command's own RunCommand.
+// It tries to match the line itself first (matchLocally: exact alias
+// prefix, then fuzzy within 1 and 2 edits), running the command
+// straight away without an LLM call. Only a line nothing matches
+// locally goes to the LLM -- e.g. "head north please".
+//
+// For that, each command already declares its Name, Describe text,
+// Aliases, and Parameters. This runner turns that into a system prompt,
+// asks the LLM which command (if any) the line invokes and what values
+// to use for its parameters, then hands off to that command's own
+// RunCommand.
 //
 // Deliberately *not* a rewrite of each command's argument parsing: the
 // model's extracted parameters become a normalized line via BuildLine
-// (e.g. "go north"), handed to the matched command's RunCommand exactly
-// as CommandRunner would -- so `pick up`'s substring matching, `go`'s
-// "Go where?" prompt, etc. all keep working unmodified. A missing
-// required parameter isn't validated here at all; the command already
-// prompts for it.
+// (e.g. "go north"), handed to the matched command's RunCommand as if
+// typed -- so `pick up`'s substring matching, `go`'s "Go where?"
+// prompt, etc. all keep working unmodified. A missing required
+// parameter isn't validated here at all; the command already prompts
+// for it.
 //
 // Failure modes (a request error, malformed/unparseable JSON, a
 // hallucinated command name, or "command": null) all fall back to the
-// same "Unknown command" reply CommandRunner gives -- from the player's
-// side, a line the model couldn't place looks the same as one no verb
-// recognizes.
+// "Unknown command" reply -- from the player's side, a line the model
+// couldn't place looks the same as one no verb recognizes.
 
 import (
 	"context"
@@ -139,6 +145,7 @@ func parameterValues(raw map[string]any) map[string]string {
 
 type LLMCommandRunner struct {
 	client       llm.Client
+	commands     []Command
 	byName       map[string]Command
 	systemPrompt string
 }
@@ -148,10 +155,14 @@ func NewLLMCommandRunner(client llm.Client, commands []Command) *LLMCommandRunne
 	for _, c := range commands {
 		byName[c.Name()] = c
 	}
-	return &LLMCommandRunner{client: client, byName: byName, systemPrompt: BuildSystemPrompt(commands)}
+	return &LLMCommandRunner{client: client, commands: commands, byName: byName, systemPrompt: BuildSystemPrompt(commands)}
 }
 
 func (r *LLMCommandRunner) Run(ctx context.Context, line string, sessionID uuid.UUID) (string, error) {
+	if command, matched, ok := matchLocally(line, r.commands); ok {
+		return command.RunCommand(ctx, matched, sessionID)
+	}
+
 	reply, err := r.client.Complete(ctx, line, r.systemPrompt)
 	if errors.Is(err, llm.ErrRequest) {
 		llmRunnerLogger.Warn("LLM request failed", "line", line, "error", err)
