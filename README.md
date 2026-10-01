@@ -106,9 +106,9 @@ LLM only if nothing matched:
 1. **Exact:** the line starts with one of a command's aliases.
 2. **Fuzzy:** the typed verb is within 1 edit of an alias, then 2. The
    limit depends on the alias's length: exact only for 1–3 letters,
-   1 edit for 4, 2 for 5 or more. So `looi` runs `look`, but `og`
-   never runs `go`.
-3. **LLM:** anything else ("head north please") goes to the model,
+   2 edits for 4 or more. So `looi` runs `look`, but `og` never runs
+   `go`.
+3. **LLM:** anything else ("grab the sword") goes to the model,
    which picks a command and extracts its parameters. A failed or
    unparseable reply is "Unknown command".
 

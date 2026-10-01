@@ -613,7 +613,7 @@ func TestLevenshtein(t *testing.T) {
 func TestAllowedDistance(t *testing.T) {
 	tests := map[string]int{
 		"n": 0, "go": 0, "say": 0, // 1-3 letters: exact only
-		"look": 1, "quit": 1, // 4 letters
+		"look": 2, "quit": 2, // 4 letters
 		"leave": 2, "travel": 2, "pick up": 2, // 5+ letters (spaces don't count)
 		"a b c": 0, // 3 letters across three words
 	}
@@ -642,8 +642,9 @@ func TestFuzzyMatchAlias(t *testing.T) {
 		{"pick", []string{"pick up"}, 2, "", false}, // too few words to compare
 		{"xyzzy", []string{"look"}, 2, "", false},
 		// The alias's own AllowedDistance caps any pass.
-		{"og north", []string{"go"}, 2, "", false},    // 2 letters: exact only
-		{"lk around", []string{"look"}, 2, "", false}, // 4 letters: 1 edit at most
+		{"og north", []string{"go"}, 2, "", false},              // 2 letters: exact only
+		{"lk around", []string{"look"}, 2, "look around", true}, // 4 letters: 2 edits
+		{"lxxx around", []string{"look"}, 2, "", false},         // 3 edits: never
 	}
 	for _, tt := range tests {
 		got, ok := FuzzyMatchAlias(tt.line, tt.aliases, tt.distance)
@@ -669,15 +670,13 @@ func TestRunnerFuzzyMatching(t *testing.T) {
 		{"ordr ale", "You order ale. It's set down in front of you without much ceremony."},
 		{"xyzzy", "Unknown command: 'xyzzy'"},
 		{"dance", "Unknown command: 'dance'"},
-		// Short aliases get little or no slack.
-		{"dorp rock", "Unknown command: 'dorp rock'"}, // 2 edits from 4-letter "drop"
-		{"og north", "Unknown command: 'og north'"},   // 3-or-fewer-letter "go": exact only
+		{"pick up rock", "You pick up a rock."},
+		{"dorp rock", "You drop a rock."}, // drop, 2 edits (4 letters allows 2)
+		// 1-3 letter aliases get no slack.
+		{"og north", "Unknown command: 'og north'"}, // 3-or-fewer-letter "go": exact only
 		{"n", "Unknown command: 'n'"},
 		{"hi", "Unknown command: 'hi'"},
 		{"no", "Unknown command: 'no'"},
-		{"ok", "Unknown command: 'ok'"},               // 2 edits from "look"
-		{"hello", "Unknown command: 'hello'"},         // 2 edits from "help"
-		{"take rock", "Unknown command: 'take rock'"}, // 2 edits from "talk"
 	}
 	for _, tt := range tests {
 		if out := f.runLine(t, runner, tt.line); out != tt.want {

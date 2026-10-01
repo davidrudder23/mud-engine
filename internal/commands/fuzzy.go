@@ -10,7 +10,7 @@ const MaxFuzzyDistance = 2
 // AllowedDistance is how many edits a typed verb may be from alias and
 // still fuzzy-match it, by the alias's letter count (spaces in a
 // multi-word alias don't count): 0 -- exact only -- for 1-3 letters,
-// 1 for 4, and MaxFuzzyDistance for 5 or more. Short aliases get less
+// 2 for 4, and MaxFuzzyDistance for 5 or more. Short aliases get no
 // slack because almost any short word is within a couple of edits of
 // them: "hi", "no", and "n" are all within 2 of "go".
 func AllowedDistance(alias string) int {
@@ -19,7 +19,7 @@ func AllowedDistance(alias string) int {
 	case letters <= 3:
 		return 0
 	case letters == 4:
-		return 1
+		return 2
 	default:
 		return MaxFuzzyDistance
 	}

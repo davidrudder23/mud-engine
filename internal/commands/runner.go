@@ -24,7 +24,7 @@ func UnknownCommand(line string) string {
 //  2. fuzzy: within 2 edits (MaxFuzzyDistance).
 //
 // Each alias only takes part in the fuzzy passes its length allows
-// (AllowedDistance: exact only for 1-3 letters, 1 edit for 4, 2 for 5+).
+// (AllowedDistance: exact only for 1-3 letters, 2 edits for 4 or more).
 // Within a pass, the earliest command in the list wins.
 func matchLocally(line string, commands []Command) (Command, string, bool) {
 	for _, command := range commands {
