@@ -1,2 +1,5 @@
-# Holds a real API key once you fill it in -- see go/internal/llm/config.go
+# Holds a real API key once you fill it in -- see internal/llm/config.go
 llm.config.json
+
+# Build output (run.sh, go build -o bin/)
+/bin/

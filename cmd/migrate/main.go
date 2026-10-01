@@ -1,5 +1,5 @@
 // Command migrate applies the schema file (MUD_SCHEMA_FILE, default
-// src/sql/schema.sql) to the configured database.
+// sql/schema.sql) to the configured database.
 //
 // A placeholder for real migrations -- fine while there's a single
 // table, worth revisiting once the schema needs to evolve

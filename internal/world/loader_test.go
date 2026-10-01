@@ -324,7 +324,7 @@ func TestLoadErrors(t *testing.T) {
 
 // The real authored world must load cleanly.
 func TestLoadProjectWorld(t *testing.T) {
-	w, err := Load(filepath.Join("..", "..", "..", "src", "world"))
+	w, err := Load(filepath.Join("..", "..", "world"))
 	if err != nil {
 		t.Fatal(err)
 	}

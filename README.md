@@ -1,15 +1,15 @@
 # MUD Engine
 
-A text-based multiplayer dungeon engine, written in Go (`go/`). Design
+A text-based multiplayer dungeon engine, written in Go. Design
 notes live in `game-idea.md`.
 
 - Structures/rooms/items/doorways/NPCs are static, authored **content**,
-  loaded from `src/world/structures/*.json`, `src/world/rooms/*.json`,
-  and `src/world/npcs/*.json` (see `go/internal/world/loader.go`). Every
+  loaded from `world/structures/*.json`, `world/rooms/*.json`,
+  and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
   Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`order`/`talk`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
-  `go/internal/repository/`). Inventory (what `pick up` adds to) is
+  `internal/repository/`). Inventory (what `pick up` adds to) is
   also dynamic, but *not* persisted yet -- it lives only in memory for
   the session, same as room occupancy. NPCs have their own inventory
   the same way, per spawned instance (below).
@@ -22,16 +22,16 @@ notes live in `game-idea.md`.
 - NPCs start as "helpers" -- a `Hostile` flag exists for the eventual
   enemy/helper split, but nothing reads it yet; there's no combat. A
   `"type": "wandering"` NPC (e.g. Carrot Ironfoundersson, see
-  `src/world/npcs/carrot-ironfoundersson.json`) moves itself through a
+  `world/npcs/carrot-ironfoundersson.json`) moves itself through a
   random doorway every `move_interval` seconds; the moving is
-  `go/internal/npcpatrol`, one goroutine per wandering NPC for as long
+  `internal/npcpatrol`, one goroutine per wandering NPC for as long
   as the server runs.
-- An `llm.Client` interface (`go/internal/llm/`) wraps calling an LLM,
+- An `llm.Client` interface (`internal/llm/`) wraps calling an LLM,
   with Claude (Anthropic) as the first implementation and the provider
   swappable via config. Two things use it: command matching (below)
   and `talk`, which asks it to improvise one in-character line from an
   NPC.
-- The game is also exposed over MCP (`go/internal/mcpserver/`) -- one
+- The game is also exposed over MCP (`internal/mcpserver/`) -- one
   tool per command, for driving a single Player from an MCP-capable
   client (Claude Desktop, Claude Code, ...) instead of a human over
   telnet. Every tool call returns `{"message": ..., "room": ...}`: that
@@ -52,8 +52,8 @@ user, using peer auth (no password). To set this up elsewhere:
 Build everything and create the schema (all commands here run from the
 project root, because the default file paths are relative to it):
 
-    go build -C go -o bin/ ./cmd/...    # binaries land in go/bin/
-    go/bin/migrate                       # applies src/sql/schema.sql
+    go build -o bin/ ./cmd/...    # binaries land in bin/
+    bin/migrate                   # applies sql/schema.sql
 
 Connection settings default to a local Unix-socket connection as your
 OS user against a database named `mud`. Override with `MUD_DB_HOST`,
@@ -71,7 +71,7 @@ keys in `llm.config.json` (gitignored; env vars win):
 
 ## Run the server
 
-    go/run.sh          # builds go/bin/server, then runs it
+    ./run.sh        # builds bin/server, then runs it
 
 Then connect with a telnet client:
 
@@ -117,12 +117,12 @@ matching, `go`'s "Go where?" prompt, ...) is what finally runs.
 
 ## Run the MCP server
 
-    go/bin/mcp-server
+    bin/mcp-server
 
 It talks stdio JSON-RPC, so an MCP client spawns it -- e.g. for Claude
 Code (run from the project root, so the default paths resolve):
 
-    claude mcp add mud-engine -- /path/to/mud-engine/go/bin/mcp-server
+    claude mcp add mud-engine -- /path/to/mud-engine/bin/mcp-server
 
 One player per process: the name comes from `MUD_MCP_PLAYER_NAME`
 (default `"adventurer"`), resolved exactly like a telnet login. Every
@@ -145,13 +145,13 @@ built LLM system prompt.
 
 ## Try it
 
-    go/bin/demo                  # prints the loaded world -- no DB needed
-    go/bin/demo-player           # creates/moves/looks up a player in Postgres
-    go/bin/demo-world-players    # room <-> player occupancy staying in sync
+    bin/demo                  # prints the loaded world -- no DB needed
+    bin/demo-player           # creates/moves/looks up a player in Postgres
+    bin/demo-world-players    # room <-> player occupancy staying in sync
 
 ## Tests
 
-    cd go && go test ./...       # add -race to check the locking
+    go test ./...                # add -race to check the locking
 
 No database or API key needed: Postgres is replaced by an in-memory
 fake repository and the LLM by a scripted fake. One test,
@@ -160,10 +160,11 @@ connectivity; it skips unless `MUD_LLM_API_KEY` is set.
 
 ## Layout
 
-    src/world/            authored content (structures, rooms, npcs JSON)
-    src/sql/schema.sql    Postgres schema (applied by migrate)
-    go/cmd/               server, mcp-server, migrate, demo* entrypoints
-    go/internal/
+    world/                authored content (structures, rooms, npcs JSON)
+    sql/schema.sql        Postgres schema (applied by migrate)
+    cmd/                  server, mcp-server, migrate, demo* entrypoints
+    bin/                  build output (gitignored)
+    internal/
       world               Structure/Room/Item/Doorway/NPC/Player, World
                           bookkeeping, the JSON loader, and the *View
                           snapshots the MCP server returns
@@ -185,8 +186,8 @@ game lock (`telnet.Server.Lock`) wraps every world access, so the game
 logic itself stays single-threaded. A command holds that lock for its
 whole run, including any LLM call or DB save.
 
-`MUD_WORLD_DIR` (default `src/world`), `MUD_SCHEMA_FILE` (default
-`src/sql/schema.sql`), and `MUD_LLM_CONFIG_FILE` (default
+`MUD_WORLD_DIR` (default `world`), `MUD_SCHEMA_FILE` (default
+`sql/schema.sql`), and `MUD_LLM_CONFIG_FILE` (default
 `llm.config.json`) override the file locations.
 
 Game logic depends on `repository.PlayerRepository` (the interface),

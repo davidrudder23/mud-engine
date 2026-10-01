@@ -15,7 +15,7 @@ package llm
 //	MUD_LLM_MODEL        optional; each provider has its own default.
 //	MUD_LLM_CONFIG_FILE  where the config file lives; default
 //	                     "llm.config.json" in the working directory (the
-//	                     project root, when run via go/run.sh).
+//	                     project root, when run via run.sh).
 //
 // The config file holds the same three settings as a JSON object:
 //

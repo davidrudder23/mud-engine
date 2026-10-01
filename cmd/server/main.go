@@ -7,7 +7,7 @@
 //	MUD_TELNET_HOST   default 127.0.0.1 (loopback only; set to 0.0.0.0
 //	                  to accept connections from other machines)
 //	MUD_TELNET_PORT   default 8023
-//	MUD_WORLD_DIR     default src/world
+//	MUD_WORLD_DIR     default world
 //
 // plus MUD_DB_* (internal/db), MUD_LLM_* (internal/llm),
 // and MUD_LOG_LEVEL. LLM config is required: every line goes through the

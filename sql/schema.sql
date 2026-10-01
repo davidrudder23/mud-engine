@@ -1,7 +1,7 @@
 -- Player persistence schema.
 --
 -- Rooms/items/doorways are static, authored content and live in
--- world/rooms/*.json (see go/internal/world/loader.go). Players are dynamic,
+-- world/rooms/*.json (see internal/world/loader.go). Players are dynamic,
 -- multi-user state, so they live here instead.
 --
 -- current_room_id is plain text, not a foreign key, because room

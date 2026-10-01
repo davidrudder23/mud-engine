@@ -11,7 +11,7 @@
 //	MUD_MCP_PLAYER_NAME   default "adventurer" -- the single Player this
 //	                      server plays as. Resolved the same way a telnet
 //	                      login resolves a name.
-//	MUD_WORLD_DIR         default src/world
+//	MUD_WORLD_DIR         default world
 //
 // plus MUD_DB_*, MUD_LLM_*, and MUD_LOG_LEVEL.
 package main
