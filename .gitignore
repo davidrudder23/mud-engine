@@ -1,5 +1,2 @@
-# Holds a real API key once you fill it in -- see src/mud/llm/config.py
+# Holds a real API key once you fill it in -- see go/internal/llm/config.go
 llm.config.json
-
-__pycache__/
-*.py[cod]

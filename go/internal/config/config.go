@@ -1,7 +1,7 @@
 // Package config holds the file locations the entrypoints share. The
-// Go binaries read the same world JSON and schema the Python code does,
-// so the defaults are relative to the project root -- run them from
-// there (go/run.sh does).
+// world JSON and schema live under src/ at the project root, outside
+// the Go module, so the defaults are relative to the project root --
+// run the binaries from there (go/run.sh does).
 package config
 
 import "os"

@@ -30,7 +30,7 @@ than gameplay verbs.
 
 - Structure/room (and related) metadata lives in **JSON files** — the
   world is authored as data, not code. `src/world/structures/*.json` and
-  `src/world/rooms/*.json` (see `src/mud/loader.py`).
+  `src/world/rooms/*.json` (see `go/internal/world/loader.go`).
 - Structure <-> room membership is kept in sync the same way as room
   <-> player occupancy (see below): `World.place_room` /
   `World.move_room_to_structure` are the only things that should touch
@@ -53,13 +53,13 @@ than gameplay verbs.
   restart, `Player.current_room_id` in Postgres does). The two are kept
   from drifting apart by routing every change through `World.place_player`
   / `World.move_player` / `World.remove_player` — nothing else should
-  touch `Room.players` directly. See `src/demo_world_players.py`.
+  touch `Room.players` directly. See `go/cmd/demo-world-players`.
 - **Location lives on the Player, not the Session.** A `Session` (see
-  `src/mud/session.py`) has a `player`, one-way — a session knows its
+  `go/internal/session`) has a `player`, one-way — a session knows its
   player, but a player doesn't know its session(s). That's deliberate:
   the same player *name* can be behind more than one session at once
   (see Networking below), and there's no reverse list to keep in sync.
-- **`Player` uses identity equality (`@dataclass(eq=False)`), not
+- **`Player` uses identity equality (compared by pointer), not
   value equality.** Two Player objects loaded from the same DB row
   (e.g. two logins under the same name) are never `==` to each other,
   only to themselves. This is load-bearing, not incidental: without it,
@@ -69,7 +69,7 @@ than gameplay verbs.
 
 ## Networking
 
-- A telnet server (`src/server.py` / `src/mud/telnet_server.py`), port 8023 by
+- A telnet server (`go/cmd/server` / `go/internal/telnet`), port 8023 by
   default, since this is meant to feel like an old-school MUD.
 - On connect: prompts "What is your name?", then `PlayerRepository.get_by_name`
   (or `create`, if new) gets/creates a Player, `World.place_player` adds
@@ -88,15 +88,15 @@ than gameplay verbs.
 ## Commands
 
 - Design spec: `command_structure.md`.
-- `Command` (`src/mud/commands/command.py`): `match_command(line) -> bool`
+- `Command` (`go/internal/commands/command.go`): `match_command(line) -> bool`
   checks fit without running anything; `run_command(line, session_id) ->
   str` runs it. (The spec's separate "execute(session_id)" idea got
   folded into `run_command` taking both the line and the session id,
   rather than having two methods that both mean "run this".)
-- `CommandRunner` (`src/mud/commands/runner.py`): tries each command's
+- `CommandRunner` (`go/internal/commands/runner.go`): tries each command's
   `match_command` in order, runs the first match, else returns an
   "Unknown command" string.
-- Matching (`matches_verb` in `src/mud/commands/command.py`): case-insensitive
+- Matching (`matches_verb` in `go/internal/commands/command.go`): case-insensitive
   prefix check against the verb, since commands can take parameters
   ("go east", "look around"). It's a plain prefix, not word-boundary, so
   e.g. "goblin" also matches "go" — accepted tradeoff, not a bug.
