@@ -767,10 +767,10 @@ func TestRunnerPassOrder(t *testing.T) {
 
 func TestRunnerHelpListsEveryCommand(t *testing.T) {
 	f, runner, _ := runnerFixture(t)
-	out := f.runLine(t, runner, "help")
-	for _, want := range []string{"look", "go <dir>", "quit", "help", "pick up <item>", "drop <item>", "inventory", "stats", "attack <npc>", "order <drink>", "talk to <npc>"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("help missing %q: %q", want, out)
+	lines := strings.Split(f.runLine(t, runner, "help"), "\r\n")
+	for _, command := range BuildAll(f.sessions, f.world, f.repo, nil) {
+		if !slices.Contains(lines, command.Describe()) {
+			t.Errorf("help doesn't list %q: %q", command.Name(), lines)
 		}
 	}
 }

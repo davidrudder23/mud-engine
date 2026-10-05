@@ -164,12 +164,19 @@ func TestLLMRunnerLogging(t *testing.T) {
 
 			f.runLine(t, runner, "some line")
 
-			records := logs.Records(llmRunnerLog)
-			if len(records) != 1 || records[0].Message != tt.message || records[0].Level != tt.level {
-				t.Errorf("records = %v", records)
+			record, ok := logs.Find(llmRunnerLog, tt.message)
+			if !ok || record.Level != tt.level {
+				t.Fatalf("want %q at %v; records = %v", tt.message, tt.level, logs.Records(llmRunnerLog))
 			}
-			if tt.err != nil && !strings.Contains(records[0].Attrs["error"], "provider down") {
-				t.Errorf("error attr = %q", records[0].Attrs["error"])
+			if tt.err != nil && !strings.Contains(record.Attrs["error"], "provider down") {
+				t.Errorf("error attr = %q", record.Attrs["error"])
+			}
+			// Nothing else is logged louder -- e.g. a deliberate "no
+			// command" mustn't also warn.
+			for _, r := range logs.Records(llmRunnerLog) {
+				if r.Level > tt.level {
+					t.Errorf("unexpected %v record: %v", r.Level, r)
+				}
 			}
 		})
 	}

@@ -14,8 +14,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"mudengine/internal/commands"
 	"mudengine/internal/llm"
 	"mudengine/internal/repository/repotest"
+	"mudengine/internal/session"
 	"mudengine/internal/world"
 	"mudengine/internal/world/worldtest"
 )
@@ -114,13 +116,14 @@ func TestRegistersOneToolPerCommand(t *testing.T) {
 	for name := range tools {
 		names = append(names, name)
 	}
-	want := []string{"look", "go", "quit", "pick_up", "drop", "inventory", "stats", "attack", "order", "talk", "help"}
-	if len(names) != len(want) {
-		t.Errorf("tools = %v, want %v", names, want)
+	// Exactly the commands a telnet session gets, one tool each.
+	all := commands.BuildAll(session.NewRegistry(), f.world, f.repo, nil)
+	if len(names) != len(all) {
+		t.Errorf("tools = %v, want one per command (%d)", names, len(all))
 	}
-	for _, name := range want {
-		if tools[name] == nil {
-			t.Errorf("missing tool %q", name)
+	for _, command := range all {
+		if tools[ToolName(command)] == nil {
+			t.Errorf("missing tool for %q", command.Name())
 		}
 	}
 }
