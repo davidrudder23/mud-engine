@@ -114,7 +114,7 @@ func TestRegistersOneToolPerCommand(t *testing.T) {
 	for name := range tools {
 		names = append(names, name)
 	}
-	want := []string{"look", "go", "quit", "pick_up", "drop", "order", "talk", "help"}
+	want := []string{"look", "go", "quit", "pick_up", "drop", "inventory", "stats", "attack", "order", "talk", "help"}
 	if len(names) != len(want) {
 		t.Errorf("tools = %v, want %v", names, want)
 	}

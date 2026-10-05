@@ -14,22 +14,62 @@ type Item struct {
 	ID          string
 	Name        string
 	Description string
+	// Non-nil if this item can be fought with.
+	Weapon *Weapon
+}
+
+// Weapon is what makes an Item usable in combat.
+type Weapon struct {
+	// Added to the wielder's strength bonus on every hit.
+	Damage int
 }
 
 func (i *Item) Format() string {
 	return i.Name
 }
 
+// clone returns an independent copy of the item, weapon included.
+func (i *Item) clone() *Item {
+	copied := *i
+	if i.Weapon != nil {
+		weapon := *i.Weapon
+		copied.Weapon = &weapon
+	}
+	return &copied
+}
+
 // ItemView is the JSON-serializable snapshot of an Item, for the MCP
 // server -- the structured counterpart to Format().
 type ItemView struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Weapon      *WeaponView `json:"weapon,omitempty"`
+}
+
+// WeaponView is the JSON-serializable snapshot of a Weapon.
+type WeaponView struct {
+	Damage int `json:"damage"`
 }
 
 func (i *Item) View() ItemView {
-	return ItemView{ID: i.ID, Name: i.Name, Description: i.Description}
+	view := ItemView{ID: i.ID, Name: i.Name, Description: i.Description}
+	if i.Weapon != nil {
+		view.Weapon = &WeaponView{Damage: i.Weapon.Damage}
+	}
+	return view
+}
+
+// BestWeapon returns the highest-damage weapon among items, or nil if
+// there is none. Whoever carries it fights with it.
+func BestWeapon(items []*Item) *Item {
+	var best *Item
+	for _, item := range items {
+		if item.Weapon != nil && (best == nil || item.Weapon.Damage > best.Weapon.Damage) {
+			best = item
+		}
+	}
+	return best
 }
 
 // GetCommands returns the verbs this item makes available, for `look`'s

@@ -36,6 +36,7 @@ import (
 	"strings"
 	"sync"
 
+	"mudengine/internal/combat"
 	"mudengine/internal/commands"
 	"mudengine/internal/llm"
 	"mudengine/internal/logging"
@@ -64,13 +65,6 @@ func BuildRunner(sessions *session.Registry, w *world.World, players repository.
 	return commands.NewLLMCommandRunner(client, commands.BuildAll(sessions, w, players, nil)), nil
 }
 
-// DefaultStartingRoomID is arbitrary but deterministic: the first
-// loaded room. There's no "spawn point" concept yet -- if the world
-// ever needs one, mark it in JSON rather than relying on load order.
-func DefaultStartingRoomID(w *world.World) string {
-	return w.Rooms()[0].ID
-}
-
 // ResolvePlayer gets the Player named name, creating one (starting in
 // the default room) if none exists yet. Also resets CurrentRoomID (and
 // persists that) if it points at a room the current world no longer
@@ -83,7 +77,7 @@ func ResolvePlayer(ctx context.Context, w *world.World, players repository.Playe
 	player, err := players.GetByName(ctx, name)
 	isNew := errors.Is(err, repository.ErrNotFound)
 	if isNew {
-		player, err = players.Create(ctx, name, DefaultStartingRoomID(w))
+		player, err = players.Create(ctx, name, w.StartingRoomID())
 		if errors.Is(err, repository.ErrDuplicatePlayerName) {
 			// Someone else's login just created it between our check
 			// and our insert -- fetch that row instead of failing.
@@ -100,7 +94,7 @@ func ResolvePlayer(ctx context.Context, w *world.World, players repository.Playe
 		// no longer exists. Send them back to the default start rather
 		// than failing the login.
 		stale := player.CurrentRoomID
-		player.CurrentRoomID = DefaultStartingRoomID(w)
+		player.CurrentRoomID = w.StartingRoomID()
 		if err := players.Save(ctx, player); err != nil {
 			return nil, err
 		}
@@ -294,6 +288,7 @@ func Run(ctx context.Context, w *world.World, players repository.PlayerRepositor
 
 	var wg sync.WaitGroup
 	startWanderingNPCs(ctx, w, server.Lock, &wg)
+	wg.Go(func() { combat.RunRegen(ctx, w, server.Lock) })
 
 	// Closing the listener is what unblocks Accept on shutdown; open
 	// connections are closed too, so their read loops end.

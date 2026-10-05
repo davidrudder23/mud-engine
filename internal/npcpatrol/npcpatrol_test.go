@@ -99,6 +99,38 @@ func TestRunForeverMovesRepeatedlyUntilCancelled(t *testing.T) {
 	}
 }
 
+func TestRunForeverStopsOnceTheNPCIsKilled(t *testing.T) {
+	w := worldtest.TwoRooms()
+	npc := wanderer(worldtest.StartID)
+	start := worldtest.MustRoom(w, worldtest.StartID)
+	start.NPCs = append(start.NPCs, npc)
+
+	waits := 0
+	original := wait
+	t.Cleanup(func() { wait = original })
+	wait = func(context.Context, time.Duration) error {
+		waits++
+		if waits == 2 { // killed between the first and second move
+			if _, err := w.KillNPC(npc); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if waits > 3 {
+			t.Fatal("patrol kept going after the NPC died")
+		}
+		return nil
+	}
+
+	if err := RunForever(context.Background(), w, npc, &sync.Mutex{}); err != nil {
+		t.Errorf("got %v, want nil", err)
+	}
+	for _, room := range w.Rooms() {
+		if slices.Contains(room.NPCs, npc) {
+			t.Errorf("dead NPC wandered back into %s", room.ID)
+		}
+	}
+}
+
 func TestRunForeverStopsOnCancellation(t *testing.T) {
 	w := worldtest.TwoRooms()
 	npc := wanderer(worldtest.StartID)

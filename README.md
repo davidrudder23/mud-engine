@@ -7,7 +7,8 @@ notes live in `game-idea.md`.
   loaded from `world/structures/*.json`, `world/rooms/*.json`,
   and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
-  Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`order`/`talk`.
+  Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`inventory`/
+  `stats`/`attack`/`order`/`talk`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
   `internal/repository/`). Inventory (what `pick up` adds to) is
   also dynamic, but *not* persisted yet -- it lives only in memory for
@@ -19,8 +20,8 @@ notes live in `game-idea.md`.
   can be placed in as many rooms as you like (or more than once in one
   room), e.g. one "shopkeeper" definition backing a distinct
   shopkeeper -- own inventory, own everything -- in every district.
-- NPCs start as "helpers" -- a `Hostile` flag exists for the eventual
-  enemy/helper split, but nothing reads it yet; there's no combat. A
+- An NPC is either an **enemy** (`"enemy": true`, with stats, and
+  can be fought -- see Combat below) or a helper, which can't be. A
   `"type": "wandering"` NPC (e.g. Carrot Ironfoundersson, see
   `world/npcs/carrot-ironfoundersson.json`) moves itself through a
   random doorway every `move_interval` seconds; the moving is
@@ -55,6 +56,9 @@ project root, because the default file paths are relative to it):
     go build -o bin/ ./cmd/...    # binaries land in bin/
     bin/migrate                   # applies sql/schema.sql
 
+`migrate` is safe to re-run, and upgrades an existing database in
+place: run it again whenever `sql/schema.sql` changes.
+
 Connection settings default to a local Unix-socket connection as your
 OS user against a database named `mud`. Override with `MUD_DB_HOST`,
 `MUD_DB_PORT`, `MUD_DB_NAME`, `MUD_DB_USER`, `MUD_DB_PASSWORD`.
@@ -86,6 +90,9 @@ that name either becomes an existing player or creates a new one. Try:
     pick up <item>   moves an item from the room into your inventory (case-insensitive
                      substring match against the item's id or name)
     drop <item>      moves an item from your inventory into the current room
+    inventory        lists what you're carrying
+    stats            shows your hit points, stamina, stats, and weapon
+    attack <npc>     fights an enemy in the room (see Combat below)
     order <drink>    flavor text only -- just echoes back what you asked for
     talk to <npc>    gets one in-character line from an NPC in the room
     quit             closes the connection
@@ -114,6 +121,43 @@ LLM only if nothing matched:
 
 Either way, each command's own argument parsing (`pick up`'s substring
 matching, `go`'s "Go where?" prompt, ...) is what finally runs.
+
+## Combat
+
+Players and enemy NPCs fight with the same rules (`internal/combat`):
+both have **strength, dexterity, luck, hit points, and stamina**.
+`attack <npc>` is one exchange: you attack, then the enemy strikes
+back if it's still standing.
+
+| Stat | Effect |
+|---|---|
+| Dexterity | chance to hit: 70% when evenly matched, ±5% per point of difference, clamped to 10–95% |
+| Strength | damage = wielded weapon's damage + half your strength (at least 1) |
+| Luck | percent chance a hit is critical (double damage), up to 50% |
+| Stamina | each attack costs 2; with less you can't attack. Everyone regains 1 every 3 seconds |
+| Hit points | damage comes off these; at 0 or below you're dead |
+
+- **Weapons** are items with a `"weapon": {"damage": N}`. You fight
+  with the best one you're carrying; with none, bare hands.
+- **An enemy that dies** drops everything it carried into the room
+  (so `pick up` loots it) and is gone. No respawn yet.
+- **A player who dies** comes to in the starting room, fully healed,
+  still carrying everything.
+- Only enemies can be attacked. Enemies only fight back; none start
+  fights yet. No player-vs-player.
+- Player stats are saved in Postgres after every exchange. New players
+  start at strength/dexterity/luck 5, 20 hit points, 10 stamina.
+  Stamina only regenerates while you're logged in.
+
+An enemy's stats (all five required) and weapons are authored in its
+NPC file, e.g. `world/npcs/drunken-brawler.json`:
+
+    "enemy": true,
+    "stats": { "strength": 7, "hit_points": 16, "stamina": 8, "luck": 2, "dexterity": 3 },
+    "inventory": [ { "id": "broken-bottle", "name": "a broken bottle", "weapon": { "damage": 3 } } ]
+
+The Mended Drum has two so far: a rat in the cellar and a brawler
+upstairs.
 
 ## Run the MCP server
 
@@ -168,6 +212,8 @@ connectivity; it skips unless `MUD_LLM_API_KEY` is set.
       world               Structure/Room/Item/Doorway/NPC/Player, World
                           bookkeeping, the JSON loader, and the *View
                           snapshots the MCP server returns
+      combat              combat rules (Attack, hit/damage/crit) and
+                          stamina regeneration
       commands            Command interface, one type per verb, BuildAll,
                           LLMCommandRunner (exact, fuzzy, then LLM)
       session             Session + Registry
@@ -179,7 +225,8 @@ connectivity; it skips unless `MUD_LLM_API_KEY` is set.
       mcpserver           MCP server (modelcontextprotocol/go-sdk)
       logging             slog setup; logtest captures records in tests
       config              MUD_WORLD_DIR / MUD_SCHEMA_FILE defaults
-      */*test             shared test fakes: worldtest, repotest, llmtest
+      */*test             shared test fakes: worldtest, repotest, llmtest,
+                          combattest
 
 Each connection and each wandering NPC runs in its own goroutine; one
 game lock (`telnet.Server.Lock`) wraps every world access, so the game

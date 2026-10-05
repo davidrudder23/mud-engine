@@ -193,6 +193,7 @@ func TestParameters(t *testing.T) {
 		{NewGoCommand(f.sessions, f.world, f.repo), []Parameter{{"direction", String, true}}},
 		{NewPickUpCommand(f.sessions, f.world), []Parameter{{"item", String, true}}},
 		{NewDropCommand(f.sessions, f.world), []Parameter{{"item", String, true}}},
+		{NewInventoryCommand(f.sessions), nil},
 		{NewOrderCommand(), []Parameter{{"drink", String, true}}},
 		{NewTalkCommand(f.sessions, f.world, nil), []Parameter{{"npc", String, true}}},
 	}
@@ -214,6 +215,7 @@ func TestMatchCommand(t *testing.T) {
 		{NewQuitCommand(f.sessions), []string{"quit"}, []string{"look"}},
 		{NewPickUpCommand(f.sessions, f.world), []string{"pick up sword"}, []string{"look", "pick"}},
 		{NewDropCommand(f.sessions, f.world), []string{"drop sword"}, []string{"look"}},
+		{NewInventoryCommand(f.sessions), []string{"inventory"}, []string{"look", "inv"}},
 		{NewOrderCommand(), []string{"order drink"}, []string{"go north"}},
 		{NewTalkCommand(f.sessions, f.world, nil), []string{"talk old tom", "talk to old tom"}, []string{"look"}},
 	}
@@ -420,6 +422,36 @@ func TestPickUpThenDropRoundTrip(t *testing.T) {
 
 	if !slices.Contains(start.Items, rock) || slices.Contains(f.player.Inventory, rock) {
 		t.Error("round trip failed")
+	}
+}
+
+func TestInventory(t *testing.T) {
+	f := newFixture(t)
+	inventory := NewInventoryCommand(f.sessions)
+
+	if out := f.run(t, inventory, "inventory"); out != "You aren't carrying anything." {
+		t.Errorf("empty: %q", out)
+	}
+
+	f.player.Inventory = []*world.Item{{ID: "rock", Name: "a rock"}, {ID: "sword", Name: "a rusty sword"}}
+	want := "You are carrying:\r\n  - a rock\r\n  - a rusty sword"
+	if out := f.run(t, inventory, "inventory"); out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+func TestInventoryReflectsPickUpAndDrop(t *testing.T) {
+	f, runner, _ := runnerFixture(t)
+	start := f.room(worldtest.StartID)
+	start.Items = append(start.Items, &world.Item{ID: "rock", Name: "a rock"})
+
+	f.runLine(t, runner, "pick up rock")
+	if out := f.runLine(t, runner, "inventory"); out != "You are carrying:\r\n  - a rock" {
+		t.Errorf("after pick up: %q", out)
+	}
+	f.runLine(t, runner, "drop rock")
+	if out := f.runLine(t, runner, "invnetory"); out != "You aren't carrying anything." { // fuzzy, 2 edits
+		t.Errorf("after drop: %q", out)
 	}
 }
 
@@ -736,7 +768,7 @@ func TestRunnerPassOrder(t *testing.T) {
 func TestRunnerHelpListsEveryCommand(t *testing.T) {
 	f, runner, _ := runnerFixture(t)
 	out := f.runLine(t, runner, "help")
-	for _, want := range []string{"look", "go <dir>", "quit", "help", "pick up <item>", "drop <item>", "order <drink>", "talk to <npc>"} {
+	for _, want := range []string{"look", "go <dir>", "quit", "help", "pick up <item>", "drop <item>", "inventory", "stats", "attack <npc>", "order <drink>", "talk to <npc>"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help missing %q: %q", want, out)
 		}

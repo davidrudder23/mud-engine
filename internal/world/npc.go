@@ -31,9 +31,12 @@ type NPC struct {
 	ID          string
 	Name        string
 	Description string
-	// Helper vs. enemy, eventually. Nothing reads this yet -- no
-	// combat, no behavior branches on it.
-	Hostile bool
+	// Enemies can be attacked and fight back (see the combat package);
+	// every other NPC is a helper and can't be attacked.
+	Enemy bool
+	// What an enemy fights with. Every enemy has them (the loader
+	// requires it); nil for a helper.
+	Stats *Stats
 	// Verbs this NPC makes available beyond the baseline in
 	// GetCommands (e.g. "trade") -- mirrors Room.Commands. Nothing
 	// consumes an entry here unless a matching Command exists (today,
@@ -57,9 +60,19 @@ type Wander struct {
 	MoveInterval time.Duration
 }
 
+// Format is the NPC's name, plus its condition once an enemy has been
+// hurt ("A Troll (wounded)").
 func (n *NPC) Format() string {
+	if n.Enemy && n.Stats != nil && n.Stats.HitPoints < n.Stats.MaxHitPoints {
+		return n.Name + " (" + n.Stats.Condition() + ")"
+	}
 	return n.Name
 }
+
+// CombatName, CombatStats, and Wielded make an NPC a combat.Combatant.
+func (n *NPC) CombatName() string  { return n.Name }
+func (n *NPC) CombatStats() *Stats { return n.Stats }
+func (n *NPC) Wielded() *Item      { return BestWeapon(n.Inventory) }
 
 // IsWandering reports whether this NPC moves around on its own.
 func (n *NPC) IsWandering() bool {
@@ -69,8 +82,9 @@ func (n *NPC) IsWandering() bool {
 // Spawn creates a new, independent NPC instance from this definition
 // (or from any existing instance -- spawning a spawn works fine, it
 // just copies whatever's currently on this one) and sets its RoomID to
-// roomID: same id/name/description/hostile/commands/wander config, but
-// its own copies of Commands and Inventory, and its own identity.
+// roomID: same id/name/description/enemy/commands/wander config, but
+// its own copies of Commands, Inventory, and Stats (so each spawn has
+// its own hit points), and its own identity.
 //
 // This only builds the instance -- the caller still adds it to that
 // room's Room.NPCs (the loader does, right after calling this), the
@@ -81,9 +95,9 @@ func (n *NPC) Spawn(roomID string) *NPC {
 	spawned.Commands = append([]string(nil), n.Commands...)
 	spawned.Inventory = make([]*Item, 0, len(n.Inventory))
 	for _, item := range n.Inventory {
-		copied := *item
-		spawned.Inventory = append(spawned.Inventory, &copied)
+		spawned.Inventory = append(spawned.Inventory, item.clone())
 	}
+	spawned.Stats = n.Stats.clone()
 	if n.Wander != nil {
 		wander := *n.Wander
 		spawned.Wander = &wander
@@ -98,9 +112,10 @@ type NPCView struct {
 	ID           string     `json:"id"`
 	Name         string     `json:"name"`
 	Description  string     `json:"description"`
-	Hostile      bool       `json:"hostile"`
+	Enemy        bool       `json:"enemy"`
 	Commands     []string   `json:"commands"`
 	Inventory    []ItemView `json:"inventory"`
+	Stats        *StatsView `json:"stats,omitempty"`
 	MoveInterval *float64   `json:"move_interval,omitempty"`
 }
 
@@ -109,9 +124,10 @@ func (n *NPC) View() NPCView {
 		ID:          n.ID,
 		Name:        n.Name,
 		Description: n.Description,
-		Hostile:     n.Hostile,
+		Enemy:       n.Enemy,
 		Commands:    append([]string{}, n.Commands...),
 		Inventory:   itemViews(n.Inventory),
+		Stats:       n.Stats.View(),
 	}
 	if n.Wander != nil {
 		seconds := n.Wander.MoveInterval.Seconds()
@@ -122,9 +138,13 @@ func (n *NPC) View() NPCView {
 
 // GetCommands returns the verbs this NPC offers, for `look`'s "you can
 // try" hint once it's placed in a room. Always includes "talk" -- every
-// NPC can be talked to -- plus whatever's authored onto Commands,
-// deduplicated and order-preserved. Nothing is derived from Inventory
-// yet.
+// NPC can be talked to -- plus "attack" for an enemy, plus whatever's
+// authored onto Commands, deduplicated and order-preserved. Nothing is
+// derived from Inventory yet.
 func (n *NPC) GetCommands() []string {
-	return dedupe(append([]string{"talk"}, n.Commands...))
+	commands := []string{"talk"}
+	if n.Enemy {
+		commands = append(commands, "attack")
+	}
+	return dedupe(append(commands, n.Commands...))
 }

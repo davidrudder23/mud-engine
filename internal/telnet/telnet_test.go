@@ -276,7 +276,7 @@ func TestLoginResetsPlayerWhoseSavedRoomNoLongerExists(t *testing.T) {
 	transcript := f.runClient(newConn("bob", "quit"))
 
 	// Sent back to the deterministic default start room.
-	defaultRoom := DefaultStartingRoomID(f.world)
+	defaultRoom := f.world.StartingRoomID()
 	if !strings.Contains(transcript, "["+defaultRoom+"]") || f.savedRoom(t, "bob") != defaultRoom {
 		t.Errorf("transcript = %q", transcript)
 	}

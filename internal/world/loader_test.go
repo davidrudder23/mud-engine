@@ -206,7 +206,7 @@ func TestLoadNPCFields(t *testing.T) {
 	d.structure(t, "s.json", obj{"id": "s", "name": "S"})
 	d.npc(t, "defaults.json", obj{"id": "defaults", "name": "Defaults"})
 	d.npc(t, "old-tom.json", obj{
-		"id": "old-tom", "name": "Old Tom", "hostile": true, "commands": []string{"trade"},
+		"id": "old-tom", "name": "Old Tom", "commands": []string{"trade"},
 		"inventory": []obj{{"id": "rag", "description": "Damp."}},
 		// Only meaningful for "wandering"; silently unused here.
 		"move_interval": 45,
@@ -216,11 +216,11 @@ func TestLoadNPCFields(t *testing.T) {
 	w := d.mustLoad(t)
 
 	defaults := w.NPCs["defaults"]
-	if defaults.Description != "" || defaults.Hostile || len(defaults.Commands) != 0 || len(defaults.Inventory) != 0 || defaults.IsWandering() {
+	if defaults.Description != "" || defaults.Enemy || defaults.Stats != nil || len(defaults.Commands) != 0 || len(defaults.Inventory) != 0 || defaults.IsWandering() {
 		t.Errorf("defaults = %+v", defaults)
 	}
 	tom := w.NPCs["old-tom"]
-	if !tom.Hostile || !slices.Equal(tom.Commands, []string{"trade"}) || tom.IsWandering() {
+	if tom.Enemy || !slices.Equal(tom.Commands, []string{"trade"}) || tom.IsWandering() {
 		t.Errorf("old-tom = %+v", tom)
 	}
 	if len(tom.Inventory) != 1 || tom.Inventory[0].ID != "rag" || tom.Inventory[0].Name != "rag" || tom.Inventory[0].Description != "Damp." {

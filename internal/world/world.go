@@ -60,6 +60,14 @@ func (w *World) Rooms() []*Room {
 	return rooms
 }
 
+// StartingRoomID is where new players appear, and where a player who
+// dies comes back to. Arbitrary but deterministic: the first loaded
+// room. There's no "spawn point" concept yet -- if the world ever needs
+// one, mark it in JSON rather than relying on load order.
+func (w *World) StartingRoomID() string {
+	return w.roomOrder[0]
+}
+
 // Len is the number of rooms.
 func (w *World) Len() int {
 	return len(w.rooms)
@@ -184,4 +192,21 @@ func (w *World) MoveNPC(npc *NPC, toRoomID string) error {
 	newRoom.NPCs = append(newRoom.NPCs, npc)
 	npc.RoomID = toRoomID
 	return nil
+}
+
+// KillNPC removes a dead NPC from the world: everything it was carrying
+// drops into its room (so `pick up` can loot it), it leaves the room's
+// NPCs, and its RoomID is cleared -- which is also what stops a
+// wandering NPC's patrol. Returns the dropped items.
+func (w *World) KillNPC(npc *NPC) ([]*Item, error) {
+	room, err := w.GetRoom(npc.RoomID)
+	if err != nil {
+		return nil, err
+	}
+	dropped := npc.Inventory
+	room.Items = append(room.Items, dropped...)
+	npc.Inventory = nil
+	room.NPCs, _ = removePtr(room.NPCs, npc)
+	npc.RoomID = ""
+	return dropped, nil
 }

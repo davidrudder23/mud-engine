@@ -90,13 +90,7 @@ func (c *TalkCommand) RunCommand(ctx context.Context, line string, sessionID uui
 		return "Talk to whom?", nil
 	}
 
-	var npc *world.NPC
-	for _, n := range room.NPCs {
-		if strings.Contains(strings.ToLower(n.ID), query) || strings.Contains(strings.ToLower(n.Name), query) {
-			npc = n
-			break
-		}
-	}
+	npc := findNPC(room.NPCs, query)
 	if npc == nil {
 		return "You don't see " + quoted(query) + " here.", nil
 	}

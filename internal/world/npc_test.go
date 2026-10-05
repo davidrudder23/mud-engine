@@ -8,7 +8,7 @@ import (
 
 func TestNPCDefaults(t *testing.T) {
 	npc := &NPC{ID: "old-tom", Name: "Old Tom"}
-	if npc.Description != "" || npc.Hostile || len(npc.Commands) != 0 || len(npc.Inventory) != 0 ||
+	if npc.Description != "" || npc.Enemy || npc.Stats != nil || len(npc.Commands) != 0 || len(npc.Inventory) != 0 ||
 		npc.RoomID != "" || npc.IsWandering() {
 		t.Errorf("unexpected defaults: %+v", npc)
 	}
@@ -40,14 +40,14 @@ func TestNPCCommands(t *testing.T) {
 }
 
 func TestSpawnCopiesStaticFieldsAndSetsRoomID(t *testing.T) {
-	definition := &NPC{ID: "old-tom", Name: "Old Tom", Description: "A bartender.", Hostile: true, Commands: []string{"trade"}}
+	definition := &NPC{ID: "old-tom", Name: "Old Tom", Description: "A bartender.", Enemy: true, Commands: []string{"trade"}}
 	instance := definition.Spawn("taproom")
 
 	if instance == definition {
 		t.Fatal("Spawn returned the definition itself")
 	}
 	if instance.ID != "old-tom" || instance.Name != "Old Tom" || instance.Description != "A bartender." ||
-		!instance.Hostile || !slices.Equal(instance.Commands, []string{"trade"}) {
+		!instance.Enemy || !slices.Equal(instance.Commands, []string{"trade"}) {
 		t.Errorf("fields not copied: %+v", instance)
 	}
 	if instance.RoomID != "taproom" {

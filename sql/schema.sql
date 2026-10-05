@@ -18,3 +18,16 @@ CREATE TABLE IF NOT EXISTS players (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Combat stats (see internal/combat). Added as ALTERs rather than in
+-- the CREATE so re-running migrate upgrades an existing table in place;
+-- existing players get the defaults. Keep the defaults in sync with
+-- world.DefaultPlayerStats.
+ALTER TABLE players
+    ADD COLUMN IF NOT EXISTS strength       INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS dexterity      INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS luck           INT NOT NULL DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS hit_points     INT NOT NULL DEFAULT 20,
+    ADD COLUMN IF NOT EXISTS max_hit_points INT NOT NULL DEFAULT 20,
+    ADD COLUMN IF NOT EXISTS stamina        INT NOT NULL DEFAULT 10,
+    ADD COLUMN IF NOT EXISTS max_stamina    INT NOT NULL DEFAULT 10;

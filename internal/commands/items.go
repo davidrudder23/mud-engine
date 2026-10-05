@@ -21,6 +21,17 @@ func findItem(items []*world.Item, query string) *world.Item {
 	return nil
 }
 
+// findNPC returns the first NPC whose id or name contains query
+// (already lowercased), case-insensitively.
+func findNPC(npcs []*world.NPC, query string) *world.NPC {
+	for _, npc := range npcs {
+		if strings.Contains(strings.ToLower(npc.ID), query) || strings.Contains(strings.ToLower(npc.Name), query) {
+			return npc
+		}
+	}
+	return nil
+}
+
 // PickUpCommand moves an item from the current room into the player's
 // inventory.
 //

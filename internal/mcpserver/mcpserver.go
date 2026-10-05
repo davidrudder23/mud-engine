@@ -30,6 +30,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"mudengine/internal/combat"
 	"mudengine/internal/commands"
 	"mudengine/internal/llm"
 	"mudengine/internal/logging"
@@ -115,6 +116,8 @@ func BuildServer(ctx context.Context, w *world.World, players repository.PlayerR
 	// Tool calls can arrive concurrently; the game logic assumes one
 	// at a time, same as the telnet server's game lock.
 	var lock sync.Mutex
+	// Stamina comes back over time, for as long as ctx lives.
+	go combat.RunRegen(ctx, w, &lock)
 	for _, command := range all {
 		tool := &mcp.Tool{
 			Name:        ToolName(command),

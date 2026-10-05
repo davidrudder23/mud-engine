@@ -63,15 +63,21 @@ var wait = func(ctx context.Context, d time.Duration) error {
 }
 
 // RunForever moves npc once every npc.Wander.MoveInterval until ctx is
-// cancelled, then returns ctx's error. Each move happens while holding
-// lock -- the game lock everything else touching the world holds too.
-// A failed move is logged and the loop carries on.
+// cancelled (returning ctx's error) or npc leaves the world -- killed,
+// via World.KillNPC, which clears its RoomID (returning nil). Each move
+// happens while holding lock -- the game lock everything else touching
+// the world holds too. A failed move is logged and the loop carries on.
 func RunForever(ctx context.Context, w *world.World, npc *world.NPC, lock sync.Locker) error {
 	for {
 		if err := wait(ctx, npc.Wander.MoveInterval); err != nil {
 			return err
 		}
 		lock.Lock()
+		if npc.RoomID == "" {
+			lock.Unlock()
+			logger.Info("NPC patrol ended", "npc", npc.Name)
+			return nil
+		}
 		err := WanderOnce(w, npc, nil)
 		lock.Unlock()
 		if err != nil {

@@ -30,11 +30,19 @@ type Player struct {
 	// in-memory state, not persisted to the players table -- picking
 	// something up only lasts for the session.
 	Inventory []*Item
+	// What this player fights with. Persisted alongside the room; the
+	// repository fills it in (DefaultPlayerStats for a new player).
+	Stats *Stats
 }
 
 func (p *Player) Format() string {
 	return p.Name
 }
+
+// CombatName, CombatStats, and Wielded make a Player a combat.Combatant.
+func (p *Player) CombatName() string  { return p.Name }
+func (p *Player) CombatStats() *Stats { return p.Stats }
+func (p *Player) Wielded() *Item      { return BestWeapon(p.Inventory) }
 
 // PlayerView is the JSON-serializable snapshot of a Player. ID is nil
 // (JSON null) for a player that was never persisted.
@@ -42,6 +50,7 @@ type PlayerView struct {
 	ID        *string    `json:"id"`
 	Name      string     `json:"name"`
 	Inventory []ItemView `json:"inventory"`
+	Stats     *StatsView `json:"stats,omitempty"`
 }
 
 func (p *Player) View() PlayerView {
@@ -50,7 +59,7 @@ func (p *Player) View() PlayerView {
 		s := p.ID.String()
 		id = &s
 	}
-	return PlayerView{ID: id, Name: p.Name, Inventory: itemViews(p.Inventory)}
+	return PlayerView{ID: id, Name: p.Name, Inventory: itemViews(p.Inventory), Stats: p.Stats.View()}
 }
 
 // GetCommands returns the verbs this player's presence makes available,

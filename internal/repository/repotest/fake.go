@@ -30,6 +30,7 @@ type FakePlayerRepository struct {
 type row struct {
 	name          string
 	currentRoomID string
+	stats         world.Stats
 	createdAt     time.Time
 	updatedAt     time.Time
 }
@@ -50,7 +51,10 @@ func (f *FakePlayerRepository) Create(_ context.Context, name, startingRoomID st
 	}
 	now := time.Now().UTC()
 	id := uuid.New()
-	f.rows[id] = &row{name: name, currentRoomID: startingRoomID, createdAt: now, updatedAt: now}
+	f.rows[id] = &row{
+		name: name, currentRoomID: startingRoomID, stats: world.DefaultPlayerStats(),
+		createdAt: now, updatedAt: now,
+	}
 	f.order = append(f.order, id)
 	return f.toPlayer(id), nil
 }
@@ -83,6 +87,9 @@ func (f *FakePlayerRepository) Save(_ context.Context, player *world.Player) err
 		return fmt.Errorf("cannot save unknown player: %s", player.ID)
 	}
 	r.currentRoomID = player.CurrentRoomID
+	if player.Stats != nil {
+		r.stats = *player.Stats
+	}
 	r.updatedAt = time.Now().UTC()
 	return nil
 }
@@ -99,11 +106,13 @@ func (f *FakePlayerRepository) ListAll(_ context.Context) ([]*world.Player, erro
 
 func (f *FakePlayerRepository) toPlayer(id uuid.UUID) *world.Player {
 	r := f.rows[id]
+	stats := r.stats // a fresh copy, like a fresh row fetch
 	return &world.Player{
 		ID:            id,
 		Name:          r.name,
 		CurrentRoomID: r.currentRoomID,
 		CreatedAt:     r.createdAt,
 		UpdatedAt:     r.updatedAt,
+		Stats:         &stats,
 	}
 }

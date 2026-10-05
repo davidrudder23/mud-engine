@@ -15,7 +15,7 @@ package world
 //
 //	{
 //	  "id": "old-tom", "name": "Old Tom", "description": "...",
-//	  "hostile": false, "commands": ["trade"],
+//	  "commands": ["trade"],
 //	  "inventory": [{"id": "rag", "name": "a bar rag", "description": "..."}],
 //	  "type": "wandering", "move_interval": 120
 //	}
@@ -23,6 +23,17 @@ package world
 // id and name required; everything else optional. "type" is "npc" (the
 // default) or "wandering"; move_interval (seconds) is only read for
 // "wandering". An unrecognized type is a load error.
+//
+// An enemy -- an NPC players can fight -- adds "enemy": true and a
+// "stats" object with all five stats (a load error if any is missing;
+// hit points and stamina start full):
+//
+//	"enemy": true,
+//	"stats": {"strength": 8, "hit_points": 30, "stamina": 10, "luck": 2, "dexterity": 3}
+//
+// Any item (in a room or an inventory) can be a weapon:
+//
+//	{"id": "club", "name": "a spiked club", "weapon": {"damage": 6}}
 //
 // Room file:
 //
@@ -69,9 +80,22 @@ func loadErrorf(format string, args ...any) error {
 }
 
 type itemJSON struct {
-	ID          *string `json:"id"`
-	Name        *string `json:"name"`
-	Description string  `json:"description"`
+	ID          *string     `json:"id"`
+	Name        *string     `json:"name"`
+	Description string      `json:"description"`
+	Weapon      *weaponJSON `json:"weapon"`
+}
+
+type weaponJSON struct {
+	Damage int `json:"damage"`
+}
+
+type statsJSON struct {
+	Strength  *int `json:"strength"`
+	HitPoints *int `json:"hit_points"`
+	Stamina   *int `json:"stamina"`
+	Luck      *int `json:"luck"`
+	Dexterity *int `json:"dexterity"`
 }
 
 type doorwayJSON struct {
@@ -90,7 +114,8 @@ type npcJSON struct {
 	ID           *string    `json:"id"`
 	Name         *string    `json:"name"`
 	Description  string     `json:"description"`
-	Hostile      bool       `json:"hostile"`
+	Enemy        bool       `json:"enemy"`
+	Stats        *statsJSON `json:"stats"`
 	Commands     []string   `json:"commands"`
 	Inventory    []itemJSON `json:"inventory"`
 	Type         *string    `json:"type"`
@@ -145,7 +170,32 @@ func itemFromJSON(data itemJSON, source string) (*Item, error) {
 	if data.Name != nil {
 		item.Name = *data.Name
 	}
+	if data.Weapon != nil {
+		item.Weapon = &Weapon{Damage: data.Weapon.Damage}
+	}
 	return item, nil
+}
+
+func statsFromJSON(data *statsJSON, source, npcID string) (*Stats, error) {
+	if data == nil {
+		return nil, loadErrorf("%s: enemy %q is missing required field 'stats'", source, npcID)
+	}
+	for _, field := range []struct {
+		name  string
+		value *int
+	}{
+		{"strength", data.Strength}, {"hit_points", data.HitPoints}, {"stamina", data.Stamina},
+		{"luck", data.Luck}, {"dexterity", data.Dexterity},
+	} {
+		if field.value == nil {
+			return nil, loadErrorf("%s: enemy %q stats are missing required field %q", source, npcID, field.name)
+		}
+	}
+	return &Stats{
+		Strength: *data.Strength, Dexterity: *data.Dexterity, Luck: *data.Luck,
+		HitPoints: *data.HitPoints, MaxHitPoints: *data.HitPoints,
+		Stamina: *data.Stamina, MaxStamina: *data.Stamina,
+	}, nil
 }
 
 func itemsFromJSON(data []itemJSON, source string) ([]*Item, error) {
@@ -205,9 +255,14 @@ func npcFromFile(path string) (*NPC, error) {
 		ID:          *data.ID,
 		Name:        *data.Name,
 		Description: data.Description,
-		Hostile:     data.Hostile,
+		Enemy:       data.Enemy,
 		Commands:    append([]string{}, data.Commands...),
 		Inventory:   inventory,
+	}
+	if data.Enemy {
+		if npc.Stats, err = statsFromJSON(data.Stats, path, *data.ID); err != nil {
+			return nil, err
+		}
 	}
 	if npcType == "wandering" {
 		npc.Wander = &Wander{MoveInterval: DefaultMoveInterval}

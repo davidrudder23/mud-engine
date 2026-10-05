@@ -126,16 +126,16 @@ func TestViews(t *testing.T) {
 		{
 			"npc with nested inventory",
 			(&NPC{
-				ID: "old-tom", Name: "Old Tom", Description: "A bartender.", Hostile: true,
+				ID: "old-tom", Name: "Old Tom", Description: "A bartender.", Enemy: true,
 				Commands: []string{"trade"}, Inventory: []*Item{{ID: "rag", Name: "a rag"}},
 			}).View(),
-			`{"id": "old-tom", "name": "Old Tom", "description": "A bartender.", "hostile": true,
+			`{"id": "old-tom", "name": "Old Tom", "description": "A bartender.", "enemy": true,
 			  "commands": ["trade"], "inventory": [{"id": "rag", "name": "a rag", "description": ""}]}`,
 		},
 		{
 			"wandering npc includes move_interval",
 			(&NPC{ID: "watchman", Name: "A Watchman", Wander: &Wander{MoveInterval: 45 * time.Second}}).View(),
-			`{"id": "watchman", "name": "A Watchman", "description": "", "hostile": false,
+			`{"id": "watchman", "name": "A Watchman", "description": "", "enemy": false,
 			  "commands": [], "inventory": [], "move_interval": 45}`,
 		},
 		{

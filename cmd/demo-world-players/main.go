@@ -14,7 +14,6 @@ import (
 	"mudengine/internal/config"
 	"mudengine/internal/db"
 	"mudengine/internal/repository"
-	"mudengine/internal/telnet"
 	"mudengine/internal/world"
 )
 
@@ -60,11 +59,11 @@ func run() error {
 	repo := repository.NewPostgresPlayerRepository(pool)
 
 	suffix := uuid.NewString()[:8]
-	alice, err := repo.Create(ctx, "alice-"+suffix, telnet.DefaultStartingRoomID(w))
+	alice, err := repo.Create(ctx, "alice-"+suffix, w.StartingRoomID())
 	if err != nil {
 		return err
 	}
-	bob, err := repo.Create(ctx, "bob-"+suffix, telnet.DefaultStartingRoomID(w))
+	bob, err := repo.Create(ctx, "bob-"+suffix, w.StartingRoomID())
 	if err != nil {
 		return err
 	}

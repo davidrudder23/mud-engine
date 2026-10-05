@@ -54,6 +54,9 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 		NewQuitCommand(sessions),
 		NewPickUpCommand(sessions, w),
 		NewDropCommand(sessions, w),
+		NewInventoryCommand(sessions),
+		NewStatsCommand(sessions),
+		NewAttackCommand(sessions, w, players),
 		NewOrderCommand(),
 		NewTalkCommand(sessions, w, talkLLM),
 	}
