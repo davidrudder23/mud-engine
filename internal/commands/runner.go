@@ -66,7 +66,9 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 	drop := NewDropCommand(sessions, w)
 	attack := NewAttackCommand(sessions, w, players)
 	say := NewSayCommand(sessions)
+	teleport := NewTeleportCommand(sessions, w, players)
 	goCommand.scripts, pickUp.scripts, drop.scripts, attack.scripts, say.scripts = scripts, scripts, scripts, scripts, scripts
+	teleport.scripts = scripts
 
 	commands := []Command{
 		NewLookCommand(sessions, w),
@@ -80,6 +82,7 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 		NewOrderCommand(),
 		NewTalkCommand(sessions, w, talkLLM),
 		say,
+		teleport,
 	}
 	if scripts != nil {
 		commands = append(commands,

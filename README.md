@@ -8,7 +8,7 @@ notes live in `game-idea.md`.
   and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
   Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`inventory`/
-  `stats`/`attack`/`order`/`talk`/`say`.
+  `stats`/`attack`/`order`/`talk`/`say`/`teleport`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
   `internal/repository/`). Inventory (what `pick up` adds to) is
   also dynamic, but *not* persisted yet -- it lives only in memory for
@@ -90,6 +90,8 @@ that name either becomes an existing player or creates a new one. Try:
     look             re-describes the room you're in, plus a "you can try: ..." hint
     go <dir>         moves through a doorway (exact, case-sensitive, e.g. "go north");
                      also typed as leave, exit, or travel
+    teleport <room>  moves you straight to any room, by its id (case-insensitive; a
+                     unique part of the id is enough, e.g. "teleport library")
     pick up <item>   moves an item from the room into your inventory (case-insensitive
                      substring match against the item's id or name)
     drop <item>      moves an item from your inventory into the current room
