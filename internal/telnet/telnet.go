@@ -3,7 +3,9 @@
 // On connect: ask for a name, get-or-create the matching Player (via
 // PlayerRepository), place it in the world, and start a Session tied to
 // that Player. From then on, every line the client sends is handed to
-// the command runner, and whatever it returns is written back.
+// the command runner, and whatever it returns is written back. Anything
+// sent to the session in the meantime (Session.Send -- another player's
+// `say`) is written as it arrives, between replies.
 //
 // Logging in twice under the same name (two connections) is allowed on
 // purpose: each gets its own Session and its own *Player for the same
@@ -216,7 +218,36 @@ func (s *Server) serve(ctx context.Context, conn io.ReadWriter, sess **session.S
 	}
 	logger.Info("Session started", "session", (*sess).ID, "player", player.Name, "room", player.CurrentRoomID)
 
-	if _, err := io.WriteString(conn, welcome); err != nil {
+	// From here on two goroutines write to conn: this one (replies to
+	// what the player typed) and the one below (what other players
+	// send them, e.g. `say`), so every write goes through write.
+	var writeMu sync.Mutex
+	write := func(text string) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_, err := io.WriteString(conn, text)
+		return err
+	}
+	done := make(chan struct{})
+	var pusher sync.WaitGroup
+	pusher.Go(func() {
+		for {
+			select {
+			case message := <-(*sess).Messages():
+				// A failed write means the connection is going away;
+				// the read loop notices that on its own.
+				write(message + "\r\n")
+			case <-done:
+				return
+			}
+		}
+	})
+	defer func() {
+		close(done)
+		pusher.Wait()
+	}()
+
+	if err := write(welcome); err != nil {
 		return err
 	}
 
@@ -239,7 +270,7 @@ func (s *Server) serve(ctx context.Context, conn io.ReadWriter, sess **session.S
 		if err != nil {
 			return err
 		}
-		if _, err := io.WriteString(conn, response+"\r\n"); err != nil {
+		if err := write(response + "\r\n"); err != nil {
 			return err
 		}
 

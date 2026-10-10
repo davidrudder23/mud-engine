@@ -1,0 +1,10 @@
+{
+  "id": "drunken-brawler",
+  "name": "A Drunken Brawler",
+  "description": "A broad-shouldered guest who was thrown out of the taproom an hour ago and has decided the hallway is now his personal territory. He sways, but with intent.",
+  "enemy": true,
+  "stats": { "strength": 7, "hit_points": 16, "stamina": 8, "luck": 2, "dexterity": 3 },
+  "inventory": [
+    { "id": "broken-bottle", "name": "a broken bottle", "description": "The business end of a bottle of something that was probably not worth drinking.", "weapon": { "damage": 3 } }
+  ]
+}

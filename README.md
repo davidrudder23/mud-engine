@@ -8,7 +8,7 @@ notes live in `game-idea.md`.
   and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
   Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`inventory`/
-  `stats`/`attack`/`order`/`talk`.
+  `stats`/`attack`/`order`/`talk`/`say`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
   `internal/repository/`). Inventory (what `pick up` adds to) is
   also dynamic, but *not* persisted yet -- it lives only in memory for
@@ -95,6 +95,7 @@ that name either becomes an existing player or creates a new one. Try:
     attack <npc>     fights an enemy in the room (see Combat below)
     order <drink>    flavor text only -- just echoes back what you asked for
     talk to <npc>    gets one in-character line from an NPC in the room
+    say <text>       everyone else in the room sees "<you> says: <text>"
     quit             closes the connection
     help             lists the commands you can use
 

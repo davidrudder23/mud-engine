@@ -196,6 +196,7 @@ func TestParameters(t *testing.T) {
 		{NewInventoryCommand(f.sessions), nil},
 		{NewOrderCommand(), []Parameter{{"drink", String, true}}},
 		{NewTalkCommand(f.sessions, f.world, nil), []Parameter{{"npc", String, true}}},
+		{NewSayCommand(f.sessions), []Parameter{{"text", String, true}}},
 	}
 	for _, tt := range tests {
 		if got := tt.command.Parameters(); !slices.Equal(got, tt.want) {
@@ -218,6 +219,7 @@ func TestMatchCommand(t *testing.T) {
 		{NewInventoryCommand(f.sessions), []string{"inventory"}, []string{"look", "inv"}},
 		{NewOrderCommand(), []string{"order drink"}, []string{"go north"}},
 		{NewTalkCommand(f.sessions, f.world, nil), []string{"talk old tom", "talk to old tom"}, []string{"look"}},
+		{NewSayCommand(f.sessions), []string{"say hello", "SAY hello"}, []string{"look", "talk old tom"}},
 	}
 	for _, tt := range tests {
 		for _, line := range tt.yes {

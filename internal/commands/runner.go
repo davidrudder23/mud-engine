@@ -59,6 +59,7 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 		NewAttackCommand(sessions, w, players),
 		NewOrderCommand(),
 		NewTalkCommand(sessions, w, talkLLM),
+		NewSayCommand(sessions),
 	}
 	// HelpCommand reads the list at run time, through a pointer to this
 	// variable -- appending itself last is what makes `help` list

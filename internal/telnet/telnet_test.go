@@ -12,12 +12,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"mudengine/internal/commands"
 	"mudengine/internal/llm"
@@ -354,4 +356,78 @@ func TestBuildRunner(t *testing.T) {
 func TestMain(m *testing.M) {
 	os.Setenv("MUD_LLM_CONFIG_FILE", filepath.Join(os.TempDir(), "mud-engine-telnet-test-no-such-llm.config.json"))
 	os.Exit(m.Run())
+}
+
+// pipeClient is one end of a live connection to HandleClient, for tests
+// that need two players connected at once.
+type pipeClient struct {
+	t    *testing.T
+	conn net.Conn
+	done chan struct{}
+}
+
+func (f *fixture) connect(t *testing.T, name string) *pipeClient {
+	t.Helper()
+	client, server := net.Pipe()
+	c := &pipeClient{t: t, conn: client, done: make(chan struct{})}
+	go func() {
+		defer close(c.done)
+		f.server.HandleClient(context.Background(), server, name)
+	}()
+	t.Cleanup(func() {
+		client.Close()
+		<-c.done
+	})
+	c.readUntil("What is your name? ")
+	c.send(name)
+	c.readUntil("Welcome, " + name + "!")
+	return c
+}
+
+func (c *pipeClient) send(line string) {
+	c.t.Helper()
+	if _, err := io.WriteString(c.conn, line+"\r\n"); err != nil {
+		c.t.Fatal(err)
+	}
+}
+
+// readUntil reads until the output so far contains want, failing the
+// test if that takes more than a few seconds.
+func (c *pipeClient) readUntil(want string) string {
+	c.t.Helper()
+	c.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var out strings.Builder
+	buf := make([]byte, 4096)
+	for !strings.Contains(out.String(), want) {
+		n, err := c.conn.Read(buf)
+		out.Write(buf[:n])
+		if err != nil {
+			c.t.Fatalf("waiting for %q: %v; got %q", want, err, out.String())
+		}
+	}
+	return out.String()
+}
+
+func TestSayIsDeliveredToAnotherConnectionInTheRoom(t *testing.T) {
+	f := newFixture(t)
+	alice := f.connect(t, "alice")
+	bob := f.connect(t, "bob")
+
+	// A reader has to be draining each side of a net.Pipe, so bob
+	// listens while alice speaks.
+	heard := make(chan string, 1)
+	go func() { heard <- bob.readUntil("alice says: hello bob\r\n") }()
+	alice.send("say hello bob")
+	alice.readUntil("You say: hello bob\r\n")
+	<-heard
+
+	// Not in the room any more, not in earshot.
+	bob.send("go north")
+	bob.readUntil(f.description(worldtest.NorthID))
+	alice.send("say anyone?")
+	alice.readUntil("You say: anyone?\r\n")
+	bob.send("look")
+	if out := bob.readUntil(f.description(worldtest.NorthID)); strings.Contains(out, "anyone?") {
+		t.Errorf("bob heard alice from another room: %q", out)
+	}
 }
