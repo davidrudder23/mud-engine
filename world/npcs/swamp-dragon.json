@@ -1,0 +1,8 @@
+{
+  "id": "swamp-dragon",
+  "name": "A Swamp Dragon",
+  "description": "About the size of a terrier, with watery eyes and the general air of a creature whose digestion is a matter of public safety.",
+  "enemy": true,
+  "stats": { "strength": 3, "hit_points": 10, "stamina": 6, "luck": 1, "dexterity": 4 },
+  "script": "swamp-dragon.lua"
+}

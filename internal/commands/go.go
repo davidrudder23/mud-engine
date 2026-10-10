@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"mudengine/internal/repository"
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
@@ -18,13 +19,16 @@ import (
 // against the current room's doorways by exact, case-sensitive
 // comparison (so "go North" won't match a doorway whose direction is
 // "north"). Moves the player via World.MovePlayer, then persists the
-// move so it survives a restart/reconnect.
+// move so it survives a restart/reconnect. Scripted NPCs in the new
+// room then get their on_enter.
 type GoCommand struct {
 	alwaysInRoom
 	verbs
 	sessions *session.Registry
 	world    *world.World
 	players  repository.PlayerRepository
+	// Nil for no scripting (see BuildAll).
+	scripts *scripting.Engine
 }
 
 func NewGoCommand(sessions *session.Registry, w *world.World, players repository.PlayerRepository) *GoCommand {
@@ -75,5 +79,7 @@ func (c *GoCommand) RunCommand(ctx context.Context, line string, sessionID uuid.
 	if err != nil {
 		return "", err
 	}
-	return next.Format(), nil
+	// The room as the player walked into it, then whatever its NPCs
+	// did about that.
+	return withLines(next.Format(), c.scripts.PlayerEntered(ctx, player)), nil
 }

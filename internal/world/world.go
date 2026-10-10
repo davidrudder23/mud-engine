@@ -20,6 +20,10 @@ type World struct {
 	// NPCs actually standing in rooms. Those are separate Spawn
 	// instances living in each Room.NPCs.
 	NPCs map[string]*NPC
+	// Where the Lua files that NPC.Script / Item.Script name live
+	// (<world_dir>/scripts for a loaded world); empty for a world
+	// with no scripts.
+	ScriptsDir string
 
 	rooms map[string]*Room
 	// Load order of rooms: Rooms() iterates in it, and the first one
@@ -176,6 +180,35 @@ func (w *World) RemovePlayer(player *Player) {
 	if room, ok := w.rooms[player.CurrentRoomID]; ok {
 		room.Players, _ = removePtr(room.Players, player)
 	}
+}
+
+// RevivePlayer is what happens to a player who dies: they come to in
+// the starting room, fully healed, still carrying everything. Like
+// MovePlayer, in-memory only -- persist the player too if it should
+// survive a restart.
+func (w *World) RevivePlayer(player *Player) error {
+	if player.Stats != nil {
+		player.Stats.Restore()
+	}
+	return w.MovePlayer(player, w.StartingRoomID())
+}
+
+// SpawnNPC spawns a new instance of the npcID definition into roomID,
+// the way loading a room's "npcs" list does. A wandering NPC spawned
+// this way stands still: patrols are only started for the NPCs a world
+// is loaded with.
+func (w *World) SpawnNPC(npcID, roomID string) (*NPC, error) {
+	definition, err := w.GetNPC(npcID)
+	if err != nil {
+		return nil, err
+	}
+	room, err := w.GetRoom(roomID)
+	if err != nil {
+		return nil, err
+	}
+	npc := definition.Spawn(roomID)
+	room.NPCs = append(room.NPCs, npc)
+	return npc, nil
 }
 
 // MoveNPC moves an already-spawned NPC to a different room. Mirrors

@@ -35,6 +35,15 @@ package world
 //
 //	{"id": "club", "name": "a spiked club", "weapon": {"damage": 6}}
 //
+// An NPC or an item can name a Lua script that gives it behaviour (see
+// the scripting package and lua_examples.md):
+//
+//	"script": "swamp-dragon.lua"
+//
+// a plain *.lua file name, looked up in <world_dir>/scripts. Whether
+// the file exists isn't checked here -- a missing or broken script is
+// logged when scripts load, and its owner behaves as if it had none.
+//
 // Room file:
 //
 //	{
@@ -84,6 +93,7 @@ type itemJSON struct {
 	Name        *string     `json:"name"`
 	Description string      `json:"description"`
 	Weapon      *weaponJSON `json:"weapon"`
+	Script      string      `json:"script"`
 }
 
 type weaponJSON struct {
@@ -120,6 +130,7 @@ type npcJSON struct {
 	Inventory    []itemJSON `json:"inventory"`
 	Type         *string    `json:"type"`
 	MoveInterval *float64   `json:"move_interval"`
+	Script       string     `json:"script"`
 }
 
 type roomJSON struct {
@@ -162,11 +173,26 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// checkScript validates a "script" value: empty (none), or a plain
+// *.lua file name with no directory part.
+func checkScript(script, source, owner string) error {
+	if script == "" {
+		return nil
+	}
+	if script != filepath.Base(script) || filepath.Ext(script) != ".lua" || script == ".lua" {
+		return loadErrorf("%s: %s has invalid script %q (expected a plain file name ending in .lua)", source, owner, script)
+	}
+	return nil
+}
+
 func itemFromJSON(data itemJSON, source string) (*Item, error) {
 	if data.ID == nil {
 		return nil, loadErrorf("%s: item is missing required field 'id'", source)
 	}
-	item := &Item{ID: *data.ID, Name: *data.ID, Description: data.Description}
+	if err := checkScript(data.Script, source, fmt.Sprintf("item %q", *data.ID)); err != nil {
+		return nil, err
+	}
+	item := &Item{ID: *data.ID, Name: *data.ID, Description: data.Description, Script: data.Script}
 	if data.Name != nil {
 		item.Name = *data.Name
 	}
@@ -247,11 +273,16 @@ func npcFromFile(path string) (*NPC, error) {
 		)
 	}
 
+	if err := checkScript(data.Script, path, fmt.Sprintf("npc %q", *data.ID)); err != nil {
+		return nil, err
+	}
+
 	inventory, err := itemsFromJSON(data.Inventory, path)
 	if err != nil {
 		return nil, err
 	}
 	npc := &NPC{
+		Script:      data.Script,
 		ID:          *data.ID,
 		Name:        *data.Name,
 		Description: data.Description,
@@ -328,6 +359,7 @@ func Load(worldDir string) (*World, error) {
 	// npcsDir is optional -- a world with no NPCs at all just omits it.
 
 	w := New()
+	w.ScriptsDir = filepath.Join(worldDir, "scripts")
 
 	paths, err := jsonFiles(structuresDir)
 	if err != nil {

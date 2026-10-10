@@ -9,6 +9,7 @@ import (
 
 	"mudengine/internal/combat"
 	"mudengine/internal/repository"
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
@@ -23,6 +24,12 @@ import (
 // carrying everything. Only enemies can be attacked; anyone else
 // "isn't looking for a fight". The player's stats are saved after
 // every exchange.
+//
+// Scripts get a say at three points: a scripted weapon's on_hit when
+// a blow lands with it (either side's), a scripted enemy's on_attacked
+// once it has survived the player's attack -- which is also where it
+// decides to strike back, see scripting.Engine.NPCAttacked -- and its
+// on_death just before it's removed.
 type AttackCommand struct {
 	alwaysInRoom
 	verbs
@@ -31,6 +38,8 @@ type AttackCommand struct {
 	players  repository.PlayerRepository
 	// Every roll in a fight; tests replace it with fixed rolls.
 	rng combat.Rand
+	// Nil for no scripting (see BuildAll).
+	scripts *scripting.Engine
 }
 
 func NewAttackCommand(sessions *session.Registry, w *world.World, players repository.PlayerRepository) *AttackCommand {
@@ -68,7 +77,7 @@ func (c *AttackCommand) RunCommand(ctx context.Context, line string, sessionID u
 		return npc.Name + " isn't looking for a fight.", nil
 	}
 
-	lines, err := c.exchange(player, npc)
+	lines, err := c.exchange(ctx, player, npc)
 	if err != nil {
 		return "", err
 	}
@@ -80,28 +89,46 @@ func (c *AttackCommand) RunCommand(ctx context.Context, line string, sessionID u
 
 // exchange is one round: the player's attack, then the enemy's, with
 // whichever deaths follow.
-func (c *AttackCommand) exchange(player *world.Player, npc *world.NPC) ([]string, error) {
+func (c *AttackCommand) exchange(ctx context.Context, player *world.Player, npc *world.NPC) ([]string, error) {
 	hit := combat.Attack(player, npc, c.rng)
 	lines := []string{describePlayerAttack(npc, hit)}
+	if hit.Hit && hit.Weapon != nil {
+		lines = append(lines, c.scripts.ItemHit(ctx, hit.Weapon, player, npc, player)...)
+	}
 
 	if hit.Killed {
+		lines = append(lines, npc.Name+" collapses, dead.")
+		// While it's still in the room, so its script can see where it
+		// died.
+		lines = append(lines, c.scripts.NPCDied(ctx, npc, player)...)
 		dropped, err := c.world.KillNPC(npc)
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, npc.Name+" collapses, dead.")
 		if len(dropped) > 0 {
 			lines = append(lines, "It drops "+itemList(dropped)+".")
 		}
 		return lines, nil
 	}
 
-	back := combat.Attack(npc, player, c.rng)
-	lines = append(lines, describeEnemyAttack(npc, back))
+	// The enemy strikes back -- unless its script overrides on_attacked
+	// and chooses not to.
+	var back combat.Result
+	struck := false
+	said := c.scripts.NPCAttacked(ctx, npc, player, func() {
+		struck = true
+		back = combat.Attack(npc, player, c.rng)
+	})
+	if struck {
+		lines = append(lines, describeEnemyAttack(npc, back))
+		if back.Hit && back.Weapon != nil {
+			lines = append(lines, c.scripts.ItemHit(ctx, back.Weapon, npc, player, player)...)
+		}
+	}
+	lines = append(lines, said...)
 
 	if back.Killed {
-		player.Stats.Restore()
-		if err := c.world.MovePlayer(player, c.world.StartingRoomID()); err != nil {
+		if err := c.world.RevivePlayer(player); err != nil {
 			return nil, err
 		}
 		room, err := c.world.GetRoom(player.CurrentRoomID)

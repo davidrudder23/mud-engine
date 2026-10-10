@@ -17,6 +17,7 @@ import (
 	"mudengine/internal/commands"
 	"mudengine/internal/llm"
 	"mudengine/internal/repository/repotest"
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 	"mudengine/internal/world/worldtest"
@@ -116,8 +117,17 @@ func TestRegistersOneToolPerCommand(t *testing.T) {
 	for name := range tools {
 		names = append(names, name)
 	}
-	// Exactly the commands a telnet session gets, one tool each.
-	all := commands.BuildAll(session.NewRegistry(), f.world, f.repo, nil)
+	// Exactly the commands a telnet session gets, one tool each --
+	// `reload` and `unload` included, since the server runs scripts.
+	scripts, err := scripting.New(f.world, nil, scripting.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scripts.Close()
+	all := commands.BuildAll(session.NewRegistry(), f.world, f.repo, nil, scripts)
+	if tools["reload"] == nil || tools["unload"] == nil {
+		t.Errorf("tools = %v, want reload and unload among them", names)
+	}
 	if len(names) != len(all) {
 		t.Errorf("tools = %v, want one per command (%d)", names, len(all))
 	}

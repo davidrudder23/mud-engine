@@ -3,5 +3,6 @@
   "name": "A Cellar Rat",
   "description": "A rat the size of a small dog, made bold by a lifetime diet of spilled beer. It regards you as a minor inconvenience on its way to the next barrel.",
   "enemy": true,
-  "stats": { "strength": 2, "hit_points": 6, "stamina": 6, "luck": 3, "dexterity": 7 }
+  "stats": { "strength": 2, "hit_points": 6, "stamina": 6, "luck": 3, "dexterity": 7 },
+  "script": "cellar-rat.lua"
 }

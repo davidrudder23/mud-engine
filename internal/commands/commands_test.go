@@ -118,7 +118,7 @@ func TestMatchAliasPrefersTheLongestMatch(t *testing.T) {
 
 func TestAliases(t *testing.T) {
 	f := newFixture(t)
-	for _, c := range BuildAll(f.sessions, f.world, f.repo, nil) {
+	for _, c := range BuildAll(f.sessions, f.world, f.repo, nil, nil) {
 		if aliases := c.Aliases(); len(aliases) == 0 || aliases[0] != c.Name() {
 			t.Errorf("%s: Aliases() = %v, want Name() first", c.Name(), aliases)
 		}
@@ -570,7 +570,7 @@ func TestTalkUnexpectedErrorIsReturned(t *testing.T) {
 func runnerFixture(t *testing.T) (*fixture, *LLMCommandRunner, *llmtest.FakeClient) {
 	f := newFixture(t)
 	talkLLM := &llmtest.FakeClient{Reply: "Welcome, traveler."}
-	all := BuildAll(f.sessions, f.world, f.repo, func() (llm.Client, error) { return talkLLM, nil })
+	all := BuildAll(f.sessions, f.world, f.repo, func() (llm.Client, error) { return talkLLM, nil }, nil)
 	matcher := &llmtest.FakeClient{Reply: `{"command": null, "parameters": {}}`}
 	return f, NewLLMCommandRunner(matcher, all), matcher
 }
@@ -770,7 +770,7 @@ func TestRunnerPassOrder(t *testing.T) {
 func TestRunnerHelpListsEveryCommand(t *testing.T) {
 	f, runner, _ := runnerFixture(t)
 	lines := strings.Split(f.runLine(t, runner, "help"), "\r\n")
-	for _, command := range BuildAll(f.sessions, f.world, f.repo, nil) {
+	for _, command := range BuildAll(f.sessions, f.world, f.repo, nil, nil) {
 		if !slices.Contains(lines, command.Describe()) {
 			t.Errorf("help doesn't list %q: %q", command.Name(), lines)
 		}

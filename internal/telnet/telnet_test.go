@@ -85,7 +85,7 @@ func newFixture(t *testing.T) *fixture {
 	// Every line the tests type matches a command locally, except
 	// "dance", which this fake LLM declines to place.
 	matcher := &llmtest.FakeClient{Reply: `{"command": null, "parameters": {}}`}
-	runner := commands.NewLLMCommandRunner(matcher, commands.BuildAll(sessions, w, repo, nil))
+	runner := commands.NewLLMCommandRunner(matcher, commands.BuildAll(sessions, w, repo, nil, nil))
 	return &fixture{
 		world:  w,
 		repo:   repo,
@@ -333,7 +333,7 @@ func TestBuildRunner(t *testing.T) {
 	}
 	build := func(t *testing.T) (*commands.LLMCommandRunner, error) {
 		f := newFixture(t)
-		return BuildRunner(f.server.Sessions, f.world, f.repo)
+		return BuildRunner(f.server.Sessions, f.world, f.repo, nil)
 	}
 
 	t.Run("builds with an api key", func(t *testing.T) {

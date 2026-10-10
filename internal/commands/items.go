@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
@@ -38,12 +39,14 @@ func findNPC(npcs []*world.NPC, query string) *world.NPC {
 // Matches items by a case-insensitive substring against either the
 // item's id or its name, so "pick up tankard" finds an item whose id is
 // "tankard" and "pick up half-finished" finds one named "a
-// half-finished tankard".
+// half-finished tankard". A scripted item then gets its on_pickup.
 type PickUpCommand struct {
 	alwaysInRoom
 	verbs
 	sessions *session.Registry
 	world    *world.World
+	// Nil for no scripting (see BuildAll).
+	scripts *scripting.Engine
 }
 
 func NewPickUpCommand(sessions *session.Registry, w *world.World) *PickUpCommand {
@@ -55,7 +58,7 @@ func (c *PickUpCommand) Parameters() []Parameter {
 	return []Parameter{{Name: "item", Type: String, Required: true}}
 }
 
-func (c *PickUpCommand) RunCommand(_ context.Context, line string, sessionID uuid.UUID) (string, error) {
+func (c *PickUpCommand) RunCommand(ctx context.Context, line string, sessionID uuid.UUID) (string, error) {
 	s, err := c.sessions.Get(sessionID)
 	if err != nil {
 		return "", err
@@ -76,17 +79,20 @@ func (c *PickUpCommand) RunCommand(_ context.Context, line string, sessionID uui
 
 	room.Items, _ = world.RemoveItem(room.Items, item)
 	s.Player.Inventory = append(s.Player.Inventory, item)
-	return "You pick up " + item.Format() + ".", nil
+	return withLines("You pick up "+item.Format()+".", c.scripts.ItemPickedUp(ctx, item, s.Player)), nil
 }
 
 // DropCommand moves an item from the player's inventory back into the
 // current room -- the reverse of `pick up`, matching items the same way
-// but against the player's inventory instead of the room.
+// but against the player's inventory instead of the room. A scripted
+// item then gets its on_drop.
 type DropCommand struct {
 	alwaysInRoom
 	verbs
 	sessions *session.Registry
 	world    *world.World
+	// Nil for no scripting (see BuildAll).
+	scripts *scripting.Engine
 }
 
 func NewDropCommand(sessions *session.Registry, w *world.World) *DropCommand {
@@ -100,7 +106,7 @@ func (c *DropCommand) Parameters() []Parameter {
 	return []Parameter{{Name: "item", Type: String, Required: true}}
 }
 
-func (c *DropCommand) RunCommand(_ context.Context, line string, sessionID uuid.UUID) (string, error) {
+func (c *DropCommand) RunCommand(ctx context.Context, line string, sessionID uuid.UUID) (string, error) {
 	s, err := c.sessions.Get(sessionID)
 	if err != nil {
 		return "", err
@@ -121,5 +127,5 @@ func (c *DropCommand) RunCommand(_ context.Context, line string, sessionID uuid.
 
 	s.Player.Inventory, _ = world.RemoveItem(s.Player.Inventory, item)
 	room.Items = append(room.Items, item)
-	return "You drop " + item.Format() + ".", nil
+	return withLines("You drop "+item.Format()+".", c.scripts.ItemDropped(ctx, item, s.Player)), nil
 }

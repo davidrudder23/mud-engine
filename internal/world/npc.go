@@ -52,6 +52,9 @@ type NPC struct {
 	// `"type": "wandering"` definition). The moving itself doesn't live
 	// here -- an NPC is still just data -- see the npcpatrol package.
 	Wander *Wander
+	// The Lua file (in World.ScriptsDir) giving this NPC behaviour
+	// beyond the defaults; empty for none. See the scripting package.
+	Script string
 }
 
 // Wander is the extra configuration a wandering NPC carries: it moves
