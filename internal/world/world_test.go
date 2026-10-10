@@ -139,6 +139,57 @@ func TestMovePlayer(t *testing.T) {
 	}
 }
 
+func TestRevivePlayer(t *testing.T) {
+	w := worldtest.TwoRooms()
+	stats := world.DefaultPlayerStats()
+	stats.HitPoints, stats.Stamina = -3, 0
+	sword := &world.Item{ID: "sword"}
+	player := &world.Player{Name: "alice", CurrentRoomID: worldtest.NorthID, Stats: &stats, Inventory: []*world.Item{sword}}
+	w.PlacePlayer(player)
+
+	if err := w.RevivePlayer(player); err != nil {
+		t.Fatal(err)
+	}
+	if player.CurrentRoomID != w.StartingRoomID() || !slices.Contains(worldtest.MustRoom(w, worldtest.StartID).Players, player) {
+		t.Errorf("revived in %q", player.CurrentRoomID)
+	}
+	if stats.HitPoints != stats.MaxHitPoints || stats.Stamina != stats.MaxStamina {
+		t.Errorf("stats = %+v", stats)
+	}
+	if !slices.Equal(player.Inventory, []*world.Item{sword}) {
+		t.Error("inventory changed")
+	}
+}
+
+func TestSpawnNPC(t *testing.T) {
+	w := worldtest.TwoRooms()
+	w.NPCs["rat"] = &world.NPC{ID: "rat", Name: "A Rat"}
+
+	first, err := w.SpawnNPC("rat", worldtest.NorthID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := w.SpawnNPC("rat", worldtest.NorthID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || first == w.NPCs["rat"] || first.RoomID != worldtest.NorthID {
+		t.Errorf("spawns should be distinct instances in the room: %+v, %+v", first, second)
+	}
+	if !slices.Equal(worldtest.MustRoom(w, worldtest.NorthID).NPCs, []*world.NPC{first, second}) {
+		t.Error("room NPCs not updated")
+	}
+
+	for _, bad := range [][2]string{{"ghost", worldtest.NorthID}, {"rat", "nowhere"}} {
+		if _, err := w.SpawnNPC(bad[0], bad[1]); !errors.Is(err, world.ErrNotFound) {
+			t.Errorf("SpawnNPC(%q, %q) = %v, want ErrNotFound", bad[0], bad[1], err)
+		}
+	}
+	if got := len(worldtest.MustRoom(w, worldtest.NorthID).NPCs); got != 2 {
+		t.Errorf("a failed spawn changed the room: %d NPCs", got)
+	}
+}
+
 func TestMovePlayerUnknownDestinationDoesNotMutate(t *testing.T) {
 	w := worldtest.TwoRooms()
 	player := &world.Player{Name: "alice", CurrentRoomID: worldtest.StartID}

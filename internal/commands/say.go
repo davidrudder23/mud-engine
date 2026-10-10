@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 )
 
@@ -14,11 +15,14 @@ import (
 // typed, case and all.
 //
 // "Other" is per session, not per name: someone logged in twice hears
-// their own other connection. NPCs don't hear any of it.
+// their own other connection. NPCs don't hear any of it, except
+// scripted ones, which get their on_say.
 type SayCommand struct {
 	alwaysInRoom
 	verbs
 	sessions *session.Registry
+	// Nil for no scripting (see BuildAll).
+	scripts *scripting.Engine
 }
 
 func NewSayCommand(sessions *session.Registry) *SayCommand {
@@ -32,7 +36,7 @@ func (c *SayCommand) Parameters() []Parameter {
 	return []Parameter{{Name: "text", Type: String, Required: true}}
 }
 
-func (c *SayCommand) RunCommand(_ context.Context, line string, sessionID uuid.UUID) (string, error) {
+func (c *SayCommand) RunCommand(ctx context.Context, line string, sessionID uuid.UUID) (string, error) {
 	s, err := c.sessions.Get(sessionID)
 	if err != nil {
 		return "", err
@@ -48,5 +52,5 @@ func (c *SayCommand) RunCommand(_ context.Context, line string, sessionID uuid.U
 			listener.Send(message)
 		}
 	}
-	return "You say: " + text, nil
+	return withLines("You say: "+text, c.scripts.PlayerSaid(ctx, s.Player, text)), nil
 }

@@ -1,7 +1,8 @@
 # Lua Scripting — Plan
 
-Status: planned, nothing built yet. This is the design agreed before
-starting work on the `lua_dynamic_loading` branch.
+Status: built, in `internal/scripting`. This is the design agreed
+before starting work on the `lua_dynamic_loading` branch; "As built",
+at the end, lists where the implementation went further or differently.
 
 ## Goal
 
@@ -146,3 +147,47 @@ which has real CPU and memory accounting (marked alpha in its README).
   once scripts can define verbs, not for the first slice.
 - **Who counts as a wizzard.** There is no auth or role system yet,
   so `reload` needs some way to be restricted.
+
+## As built
+
+Everything under Decisions and Safety is implemented, with these
+differences from the plan above:
+
+- **More than the first slice.** All five monster hooks are in, and
+  items are scriptable too (`Item:extend()`, with `on_pickup`,
+  `on_drop`, `on_hit`); an item's `"script"` goes on its inline JSON
+  entry. `self:move()` and scripted verbs are not built.
+- **Reload replaces the class rather than patching it.** Each instance
+  finds its class by script name on every access, so swapping the
+  class under that name is enough; no methods are copied between
+  tables. The effect is the one planned: live instances keep their
+  state and get the new behaviour.
+- **`reload` takes a script name, not an NPC id** (`reload
+  swamp-dragon`), since inline items have no definition id. There is
+  an `unload <script>` too.
+- **Wizzards are the names in `MUD_WIZZARDS`.** That settles the open
+  question as far as it can be settled without real auth.
+- **`on_attacked` is where an enemy strikes back.** The base class's
+  version does it, so a script that overrides the hook without calling
+  `Monster.on_attacked(self, attacker)` has an enemy that doesn't.
+- **Each script gets its own global environment** (falling back to the
+  real one), so a forgotten `local` can't leak between scripts.
+- **`string.rep` is capped at 1MB**, closing the one case named under
+  Known gaps where the deadline couldn't interrupt a built-in.
+- **Admission budgets:** 256KB allocated per round of traffic, 16KB
+  more retained after 1,000 rounds, 2 seconds for the whole run. Lua
+  allocates for nearly every number it handles, so the allocation
+  budget bounds how much work a hook does as well as its memory.
+- **Script output joins the command's reply.** Text a hook addresses
+  to the player whose command triggered it is appended to that
+  command's reply, so it arrives in order; everyone else gets it as a
+  separate message.
+
+Still open:
+
+- **The world JSON is only read at startup.** Scripts hot-reload, but
+  attaching a script to something new, or adding a scripted NPC,
+  takes a restart.
+- **A wandering NPC created by `room:spawn` stands still:** patrols
+  are only started for the NPCs the world loads with.
+- **MCP tool registration**, as above, for when scripted verbs exist.

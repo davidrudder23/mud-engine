@@ -22,8 +22,8 @@
 // Concurrency: each connection and each wandering NPC runs in its own
 // goroutine, and they all share the world. Server.Lock is the one game
 // lock around every world access -- placing/removing a player, running
-// a command, moving an NPC -- so the game logic itself stays
-// single-threaded. Commands run under it end to end, including any LLM
+// a command, moving an NPC, ticking scripts -- so the game logic
+// itself, Lua included, stays single-threaded. Commands run under it end to end, including any LLM
 // call or DB save they make, which serializes those across players;
 // fine at this scale, and the obvious thing to revisit if it isn't.
 package telnet
@@ -44,6 +44,7 @@ import (
 	"mudengine/internal/logging"
 	"mudengine/internal/npcpatrol"
 	"mudengine/internal/repository"
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
@@ -59,12 +60,28 @@ var logger = logging.For("mud.telnet")
 
 // BuildRunner builds every command (commands.BuildAll) and the runner
 // that dispatches lines to them, using the configured LLM client.
-func BuildRunner(sessions *session.Registry, w *world.World, players repository.PlayerRepository) (*commands.LLMCommandRunner, error) {
+// scripts is the Lua engine the commands call hooks on (nil for none).
+func BuildRunner(sessions *session.Registry, w *world.World, players repository.PlayerRepository, scripts *scripting.Engine) (*commands.LLMCommandRunner, error) {
 	client, err := llm.GetClient()
 	if err != nil {
 		return nil, err
 	}
-	return commands.NewLLMCommandRunner(client, commands.BuildAll(sessions, w, players, nil)), nil
+	return commands.NewLLMCommandRunner(client, commands.BuildAll(sessions, w, players, nil, scripts)), nil
+}
+
+// StartScripts builds the Lua engine for w and loads every script the
+// world refers to. A script that fails to load is logged and left out;
+// only failing to start the engine itself is an error.
+//
+// Shared with the MCP server, like ResolvePlayer.
+func StartScripts(ctx context.Context, w *world.World, sessions *session.Registry, players repository.PlayerRepository) (*scripting.Engine, error) {
+	scripts, err := scripting.New(w, sessions, scripting.Options{SavePlayer: players.Save})
+	if err != nil {
+		return nil, err
+	}
+	loaded, failed := scripts.LoadAll(ctx)
+	logger.Info("Loaded scripts", "loaded", loaded, "failed", failed, "dir", w.ScriptsDir)
+	return scripts, nil
 }
 
 // ResolvePlayer gets the Player named name, creating one (starting in
@@ -302,7 +319,12 @@ func startWanderingNPCs(ctx context.Context, w *world.World, lock sync.Locker, w
 // Run serves telnet on host:port until ctx is cancelled.
 func Run(ctx context.Context, w *world.World, players repository.PlayerRepository, host string, port int) error {
 	sessions := session.NewRegistry()
-	runner, err := BuildRunner(sessions, w, players)
+	scripts, err := StartScripts(ctx, w, sessions, players)
+	if err != nil {
+		return err
+	}
+	defer scripts.Close()
+	runner, err := BuildRunner(sessions, w, players, scripts)
 	if err != nil {
 		return err
 	}
@@ -320,6 +342,7 @@ func Run(ctx context.Context, w *world.World, players repository.PlayerRepositor
 	var wg sync.WaitGroup
 	startWanderingNPCs(ctx, w, server.Lock, &wg)
 	wg.Go(func() { combat.RunRegen(ctx, w, server.Lock) })
+	wg.Go(func() { scripts.Run(ctx, server.Lock) })
 
 	// Closing the listener is what unblocks Accept on shutdown; open
 	// connections are closed too, so their read loops end.

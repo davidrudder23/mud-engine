@@ -27,6 +27,9 @@ notes live in `game-idea.md`.
   random doorway every `move_interval` seconds; the moving is
   `internal/npcpatrol`, one goroutine per wandering NPC for as long
   as the server runs.
+- NPCs and items can be **scripted in Lua** (`"script": "rat.lua"`,
+  a file in `world/scripts/`), and a script can be loaded, reloaded,
+  and unloaded while the server runs -- see Scripting below.
 - An `llm.Client` interface (`internal/llm/`) wraps calling an LLM,
   with Claude (Anthropic) as the first implementation and the provider
   swappable via config. Two things use it: command matching (below)
@@ -98,6 +101,8 @@ that name either becomes an existing player or creates a new one. Try:
     say <text>       everyone else in the room sees "<you> says: <text>"
     quit             closes the connection
     help             lists the commands you can use
+    reload <script>  loads the latest version of a Lua script (wizzards only)
+    unload <script>  stops a Lua script running (wizzards only)
 
 `MUD_TELNET_HOST` (default `127.0.0.1`; `0.0.0.0` to accept other
 machines) and `MUD_TELNET_PORT` (default `8023`) configure the
@@ -158,7 +163,40 @@ NPC file, e.g. `world/npcs/drunken-brawler.json`:
     "inventory": [ { "id": "broken-bottle", "name": "a broken bottle", "weapon": { "damage": 3 } } ]
 
 The Mended Drum has two so far: a rat in the cellar and a brawler
-upstairs.
+upstairs. The Watch's holding cells have a third, a swamp dragon.
+
+## Scripting
+
+NPCs and items can be given behaviour in Lua, without recompiling or
+restarting: edit the script, type `reload <script>` in the game, and
+everything already using it behaves the new way, keeping its state.
+`lua_examples.md` is the guide for the wizzards writing scripts;
+`lua_scripting.md` is the design.
+
+- **Attaching a script:** add `"script": "swamp-dragon.lua"` to an NPC
+  file or to an inline item, naming a file in `world/scripts/`. The
+  world ships three: `cellar-rat.lua`, `swamp-dragon.lua` (in the
+  Watch's holding cells), and `muttering-sword.lua` (in the armory).
+- **What a script is:** a class extending `Monster` or `Item` that
+  overrides hooks -- `on_enter`, `on_say`, `on_attacked`, `on_death`,
+  `on_tick` for a monster; `on_pickup`, `on_drop`, `on_hit` for an
+  item. Anything it doesn't override behaves as it would unscripted.
+- **Who can reload:** the players named in `MUD_WIZZARDS`
+  (comma-separated, case-insensitive; empty by default, so nobody).
+  There's no real auth, so this is only as strong as who can reach
+  the telnet port.
+- **What a reload checks:** the new version is run against simulated
+  traffic first and rejected -- with the reason shown to the wizzard,
+  and the old version left running -- if it doesn't compile, a hook
+  fails, or it allocates too much memory or keeps holding more of it.
+- **At run time:** scripts see only Lua's `string`, `table`, and
+  `math` libraries plus the game API; every hook runs under a 250ms
+  deadline; and a script whose hooks fail 5 times in a row is disabled
+  until it's reloaded.
+
+Scripts are hot-reloadable, the JSON isn't: giving an NPC or item a
+script for the first time (or adding a new scripted NPC) still takes a
+restart, since the world JSON is only read at startup.
 
 ## Run the MCP server
 
@@ -197,6 +235,10 @@ built LLM system prompt.
 ## Tests
 
     go test ./...                # add -race to check the locking
+
+`internal/scripting` includes a test that runs every script the world
+uses through the same admission check `reload` does, so a script that
+wouldn't load fails the build.
 
 No database or API key needed: Postgres is replaced by an in-memory
 fake repository and the LLM by a scripted fake. One test,

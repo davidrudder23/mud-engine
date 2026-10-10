@@ -101,7 +101,13 @@ func BuildServer(ctx context.Context, w *world.World, players repository.PlayerR
 
 	sessions := session.NewRegistry()
 	sess := sessions.Create(player)
-	all := commands.BuildAll(sessions, w, players, opts.TalkLLM)
+	// Never closed: like the regen loop below, it lives as long as the
+	// process does.
+	scripts, err := telnet.StartScripts(ctx, w, sessions, players)
+	if err != nil {
+		return nil, err
+	}
+	all := commands.BuildAll(sessions, w, players, opts.TalkLLM, scripts)
 
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "mud-engine", Version: "0.1.0"},
@@ -118,6 +124,8 @@ func BuildServer(ctx context.Context, w *world.World, players repository.PlayerR
 	var lock sync.Mutex
 	// Stamina comes back over time, for as long as ctx lives.
 	go combat.RunRegen(ctx, w, &lock)
+	// And scripted NPCs get their on_tick.
+	go scripts.Run(ctx, &lock)
 	for _, command := range all {
 		tool := &mcp.Tool{
 			Name:        ToolName(command),

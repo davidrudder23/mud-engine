@@ -249,6 +249,35 @@ func TestLoadWanderingNPC(t *testing.T) {
 	}
 }
 
+func TestLoadScripts(t *testing.T) {
+	d := newWorldDir(t)
+	d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+	d.npc(t, "rat.json", obj{
+		"id": "rat", "name": "A Rat", "script": "rat.lua",
+		"inventory": []obj{{"id": "tooth", "script": "tooth.lua"}},
+	})
+	d.npc(t, "old-tom.json", obj{"id": "old-tom", "name": "Old Tom"})
+	d.room(t, "r.json", obj{
+		"id": "r", "structure_id": "s", "npcs": []string{"rat", "old-tom"},
+		"items": []obj{{"id": "sword", "script": "sword.lua"}, {"id": "rock"}},
+	})
+
+	w := d.mustLoad(t)
+
+	if want := filepath.Join(string(d), "scripts"); w.ScriptsDir != want {
+		t.Errorf("ScriptsDir = %q, want %q", w.ScriptsDir, want)
+	}
+	room := mustRoom(t, w, "r")
+	// A spawn keeps its definition's script, and so do the items it
+	// carries.
+	if rat := room.NPCs[0]; rat.Script != "rat.lua" || rat.Inventory[0].Script != "tooth.lua" {
+		t.Errorf("rat script = %q, carrying %q", rat.Script, rat.Inventory[0].Script)
+	}
+	if room.NPCs[1].Script != "" || room.Items[0].Script != "sword.lua" || room.Items[1].Script != "" {
+		t.Errorf("scripts = %q, %q, %q", room.NPCs[1].Script, room.Items[0].Script, room.Items[1].Script)
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -303,6 +332,18 @@ func TestLoadErrors(t *testing.T) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
 			d.npc(t, "a.json", obj{"id": "dup", "name": "One"})
 			d.npc(t, "b.json", obj{"id": "dup", "name": "Two"})
+		}},
+		{"npc script with a directory", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.npc(t, "old-tom.json", obj{"id": "old-tom", "name": "Old Tom", "script": "../old-tom.lua"})
+		}},
+		{"npc script that isn't lua", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.npc(t, "old-tom.json", obj{"id": "old-tom", "name": "Old Tom", "script": "old-tom.sh"})
+		}},
+		{"item script with a directory", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{{"id": "rock", "script": "scripts/rock.lua"}}})
 		}},
 		{"room references unknown npc", func(t *testing.T, d worldDir) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})

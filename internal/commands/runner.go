@@ -3,8 +3,10 @@ package commands
 import (
 	"strings"
 
+	"mudengine/internal/config"
 	"mudengine/internal/llm"
 	"mudengine/internal/repository"
+	"mudengine/internal/scripting"
 	"mudengine/internal/session"
 	"mudengine/internal/world"
 )
@@ -44,22 +46,46 @@ func matchLocally(line string, commands []Command) (Command, string, bool) {
 	return nil, "", false
 }
 
+// withLines appends lines (what a script hook had to say to this
+// player) to a command's reply.
+func withLines(reply string, lines []string) string {
+	if len(lines) == 0 {
+		return reply
+	}
+	return reply + "\r\n" + strings.Join(lines, "\r\n")
+}
+
 // BuildAll builds every command a session gets -- the one list both the
 // telnet server and the MCP server use. talkLLM is how `talk` gets its
-// LLM client (nil for llm.GetClient).
-func BuildAll(sessions *session.Registry, w *world.World, players repository.PlayerRepository, talkLLM func() (llm.Client, error)) []Command {
+// LLM client (nil for llm.GetClient). scripts is the Lua engine whose
+// hooks the commands call; nil for a world with no scripting, which
+// also leaves out the `reload` and `unload` commands.
+func BuildAll(sessions *session.Registry, w *world.World, players repository.PlayerRepository, talkLLM func() (llm.Client, error), scripts *scripting.Engine) []Command {
+	goCommand := NewGoCommand(sessions, w, players)
+	pickUp := NewPickUpCommand(sessions, w)
+	drop := NewDropCommand(sessions, w)
+	attack := NewAttackCommand(sessions, w, players)
+	say := NewSayCommand(sessions)
+	goCommand.scripts, pickUp.scripts, drop.scripts, attack.scripts, say.scripts = scripts, scripts, scripts, scripts, scripts
+
 	commands := []Command{
 		NewLookCommand(sessions, w),
-		NewGoCommand(sessions, w, players),
+		goCommand,
 		NewQuitCommand(sessions),
-		NewPickUpCommand(sessions, w),
-		NewDropCommand(sessions, w),
+		pickUp,
+		drop,
 		NewInventoryCommand(sessions),
 		NewStatsCommand(sessions),
-		NewAttackCommand(sessions, w, players),
+		attack,
 		NewOrderCommand(),
 		NewTalkCommand(sessions, w, talkLLM),
-		NewSayCommand(sessions),
+		say,
+	}
+	if scripts != nil {
+		commands = append(commands,
+			NewReloadCommand(sessions, scripts, config.IsWizzard),
+			NewUnloadCommand(sessions, scripts, config.IsWizzard),
+		)
 	}
 	// HelpCommand reads the list at run time, through a pointer to this
 	// variable -- appending itself last is what makes `help` list

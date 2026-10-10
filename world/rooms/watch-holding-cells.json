@@ -8,5 +8,6 @@
   "doorways": [
     { "direction": "west", "to": "watch-muster-room", "description": "Back to the muster room." }
   ],
+  "npcs": ["swamp-dragon"],
   "commands": ["listen"]
 }

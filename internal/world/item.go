@@ -16,6 +16,9 @@ type Item struct {
 	Description string
 	// Non-nil if this item can be fought with.
 	Weapon *Weapon
+	// The Lua file (in World.ScriptsDir) giving this item behaviour
+	// beyond the defaults; empty for none. See the scripting package.
+	Script string
 }
 
 // Weapon is what makes an Item usable in combat.
