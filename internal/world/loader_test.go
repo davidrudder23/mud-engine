@@ -278,6 +278,28 @@ func TestLoadScripts(t *testing.T) {
 	}
 }
 
+func TestLoadWeaponTypes(t *testing.T) {
+	d := newWorldDir(t)
+	d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+	d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{
+		{"id": "spear", "weapon": obj{"damage": 5, "type": "spear"}},
+		{"id": "club", "weapon": obj{"damage": 6}},
+		{"id": "rock"},
+	}})
+
+	items := mustRoom(t, d.mustLoad(t), "r").Items
+
+	if spear := items[0]; spear.Weapon.Type != WeaponSpear || !spear.Throwable() || spear.View().Weapon.Type != "spear" {
+		t.Errorf("spear = %+v", spear.Weapon)
+	}
+	if club := items[1]; club.Weapon.Type != "" || club.Throwable() {
+		t.Errorf("club = %+v", club.Weapon)
+	}
+	if items[2].Throwable() {
+		t.Error("a rock is throwable")
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -344,6 +366,10 @@ func TestLoadErrors(t *testing.T) {
 		{"item script with a directory", func(t *testing.T, d worldDir) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
 			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{{"id": "rock", "script": "scripts/rock.lua"}}})
+		}},
+		{"unknown weapon type", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{{"id": "bow", "weapon": obj{"damage": 2, "type": "bow"}}}})
 		}},
 		{"room references unknown npc", func(t *testing.T, d worldDir) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})

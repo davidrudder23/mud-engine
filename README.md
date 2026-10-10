@@ -8,7 +8,7 @@ notes live in `game-idea.md`.
   and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
   Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`inventory`/
-  `stats`/`attack`/`order`/`talk`/`say`/`teleport`.
+  `stats`/`attack`/`throw`/`order`/`talk`/`say`/`teleport`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
   `internal/repository/`). Inventory (what `pick up` adds to) is
   also dynamic, but *not* persisted yet -- it lives only in memory for
@@ -98,6 +98,7 @@ that name either becomes an existing player or creates a new one. Try:
     inventory        lists what you're carrying
     stats            shows your hit points, stamina, stats, and weapon
     attack <npc>     fights an enemy in the room (see Combat below)
+    throw <item> <dir>  throws a spear that way, e.g. "throw spear east" (see Combat below)
     order <drink>    flavor text only -- just echoes back what you asked for
     talk to <npc>    gets one in-character line from an NPC in the room
     say <text>       everyone else in the room sees "<you> says: <text>"
@@ -147,6 +148,14 @@ back if it's still standing.
 
 - **Weapons** are items with a `"weapon": {"damage": N}`. You fight
   with the best one you're carrying; with none, bare hands.
+- **Spears** are weapons with `"type": "spear"`, which can also be
+  thrown: `throw spear east`. A thrown spear looks for an enemy in
+  your own room first, then flies room to room in that direction
+  until it finds one or there's no doorway that way. At the first
+  enemy it's one blow with the spear, which can miss; either way it
+  stops there, and the enemy doesn't strike back. A throw costs the
+  same stamina as an attack, and the spear ends up on the floor where
+  its flight ended. There's one in the Watch's armory.
 - **An enemy that dies** drops everything it carried into the room
   (so `pick up` loots it) and is gone. No respawn yet.
 - **A player who dies** comes to in the starting room, fully healed,

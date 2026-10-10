@@ -21,10 +21,26 @@ type Item struct {
 	Script string
 }
 
+// WeaponSpear is the Weapon.Type of a spear: a weapon that can also be
+// thrown (see the throw command).
+const WeaponSpear = "spear"
+
+// WeaponTypes lists the recognized Weapon.Type values besides "", an
+// ordinary hand weapon.
+var WeaponTypes = []string{WeaponSpear}
+
 // Weapon is what makes an Item usable in combat.
 type Weapon struct {
 	// Added to the wielder's strength bonus on every hit.
 	Damage int
+	// What kind of weapon this is: "" for an ordinary hand weapon, or
+	// one of WeaponTypes.
+	Type string
+}
+
+// Throwable reports whether this item can be thrown: only spears can.
+func (i *Item) Throwable() bool {
+	return i.Weapon != nil && i.Weapon.Type == WeaponSpear
 }
 
 func (i *Item) Format() string {
@@ -50,15 +66,17 @@ type ItemView struct {
 	Weapon      *WeaponView `json:"weapon,omitempty"`
 }
 
-// WeaponView is the JSON-serializable snapshot of a Weapon.
+// WeaponView is the JSON-serializable snapshot of a Weapon. Type is
+// only present for something other than an ordinary hand weapon.
 type WeaponView struct {
-	Damage int `json:"damage"`
+	Damage int    `json:"damage"`
+	Type   string `json:"type,omitempty"`
 }
 
 func (i *Item) View() ItemView {
 	view := ItemView{ID: i.ID, Name: i.Name, Description: i.Description}
 	if i.Weapon != nil {
-		view.Weapon = &WeaponView{Damage: i.Weapon.Damage}
+		view.Weapon = &WeaponView{Damage: i.Weapon.Damage, Type: i.Weapon.Type}
 	}
 	return view
 }

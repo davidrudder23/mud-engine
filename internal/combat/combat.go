@@ -107,17 +107,26 @@ func Damage(attacker *world.Stats, weapon *world.Item) int {
 	return max(damage, 1)
 }
 
-// Attack resolves one attack: spend the attacker's stamina, roll to
-// hit, roll for a crit on a hit, and take the damage off the defender's
-// hit points. Rolls happen in that order, each rng.IntN(100).
+// Attack resolves one attack: spend the attacker's stamina, then
+// Strike with whatever the attacker wields.
 func Attack(attacker, defender Combatant, rng Rand) Result {
-	a, d := attacker.CombatStats(), defender.CombatStats()
+	a := attacker.CombatStats()
 	if a.Stamina < StaminaCost {
 		return Result{Tired: true}
 	}
 	a.Stamina -= StaminaCost
+	return Strike(attacker, defender, attacker.Wielded(), rng)
+}
 
-	result := Result{Weapon: attacker.Wielded()}
+// Strike resolves one blow with weapon (nil for bare hands), whatever
+// the attacker wields and without touching stamina: roll to hit, roll
+// for a crit on a hit, and take the damage off the defender's hit
+// points. Rolls happen in that order, each rng.IntN(100). For a blow
+// that isn't an ordinary attack -- a thrown spear, whose thrower has
+// already paid for the throw.
+func Strike(attacker, defender Combatant, weapon *world.Item, rng Rand) Result {
+	a, d := attacker.CombatStats(), defender.CombatStats()
+	result := Result{Weapon: weapon}
 	if rng.IntN(100) >= HitChance(a, d) {
 		return result
 	}
