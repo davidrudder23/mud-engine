@@ -186,3 +186,25 @@ func TestRunRegenTicksUntilCancelled(t *testing.T) {
 		t.Errorf("stamina = %d after 4 ticks", player.Stats.Stamina)
 	}
 }
+
+// Strike is a blow with a chosen weapon: not necessarily the best one
+// carried, and with no stamina spent or needed.
+func TestStrikeUsesTheGivenWeaponAndNoStamina(t *testing.T) {
+	spear := &world.Item{Weapon: &world.Weapon{Damage: 2, Type: world.WeaponSpear}}
+	club := &world.Item{Weapon: &world.Weapon{Damage: 9}}
+	attacker := fighter(even(), club)
+	attacker.Stats.Stamina = 0
+	defender := fighter(even())
+
+	result := Strike(attacker, defender, spear, combattest.NewRolls(0, 99))
+
+	if !result.Hit || result.Weapon != spear || result.Damage != Damage(attacker.Stats, spear) {
+		t.Errorf("result = %+v", result)
+	}
+	if defender.Stats.HitPoints != defender.Stats.MaxHitPoints-result.Damage {
+		t.Errorf("defender hit points = %d", defender.Stats.HitPoints)
+	}
+	if attacker.Stats.Stamina != 0 {
+		t.Errorf("attacker stamina = %d", attacker.Stats.Stamina)
+	}
+}

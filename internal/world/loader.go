@@ -35,6 +35,12 @@ package world
 //
 //	{"id": "club", "name": "a spiked club", "weapon": {"damage": 6}}
 //
+// and a weapon can have a type. The only one so far is "spear", which
+// can be thrown as well as fought with; an unrecognized type is a load
+// error:
+//
+//	{"id": "spear", "name": "a spear", "weapon": {"damage": 5, "type": "spear"}}
+//
 // An NPC or an item can name a Lua script that gives it behaviour (see
 // the scripting package and lua_examples.md):
 //
@@ -70,6 +76,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 )
@@ -97,7 +104,8 @@ type itemJSON struct {
 }
 
 type weaponJSON struct {
-	Damage int `json:"damage"`
+	Damage int    `json:"damage"`
+	Type   string `json:"type"`
 }
 
 type statsJSON struct {
@@ -197,7 +205,13 @@ func itemFromJSON(data itemJSON, source string) (*Item, error) {
 		item.Name = *data.Name
 	}
 	if data.Weapon != nil {
-		item.Weapon = &Weapon{Damage: data.Weapon.Damage}
+		if weaponType := data.Weapon.Type; weaponType != "" && !slices.Contains(WeaponTypes, weaponType) {
+			return nil, loadErrorf(
+				"%s: item %q has unknown weapon type %q (expected one of %q)",
+				source, *data.ID, weaponType, WeaponTypes,
+			)
+		}
+		item.Weapon = &Weapon{Damage: data.Weapon.Damage, Type: data.Weapon.Type}
 	}
 	return item, nil
 }
