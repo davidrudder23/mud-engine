@@ -210,17 +210,18 @@ func TestLoadNPCFields(t *testing.T) {
 		"inventory": []obj{{"id": "rag", "description": "Damp."}},
 		// Only meaningful for "wandering"; silently unused here.
 		"move_interval": 45,
+		"persona":       "Gruff, but fond of regulars.",
 	})
 	d.room(t, "r.json", obj{"id": "r", "structure_id": "s"})
 
 	w := d.mustLoad(t)
 
 	defaults := w.NPCs["defaults"]
-	if defaults.Description != "" || defaults.Enemy || defaults.Stats != nil || len(defaults.Commands) != 0 || len(defaults.Inventory) != 0 || defaults.IsWandering() {
+	if defaults.Description != "" || defaults.Persona != "" || defaults.Enemy || defaults.Stats != nil || len(defaults.Commands) != 0 || len(defaults.Inventory) != 0 || defaults.IsWandering() {
 		t.Errorf("defaults = %+v", defaults)
 	}
 	tom := w.NPCs["old-tom"]
-	if tom.Enemy || !slices.Equal(tom.Commands, []string{"trade"}) || tom.IsWandering() {
+	if tom.Enemy || !slices.Equal(tom.Commands, []string{"trade"}) || tom.IsWandering() || tom.Persona != "Gruff, but fond of regulars." {
 		t.Errorf("old-tom = %+v", tom)
 	}
 	if len(tom.Inventory) != 1 || tom.Inventory[0].ID != "rag" || tom.Inventory[0].Name != "rag" || tom.Inventory[0].Description != "Damp." {

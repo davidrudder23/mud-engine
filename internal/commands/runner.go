@@ -56,8 +56,9 @@ func withLines(reply string, lines []string) string {
 }
 
 // BuildAll builds every command a session gets -- the one list both the
-// telnet server and the MCP server use. talkLLM is how `talk` gets its
-// LLM client (nil for llm.GetClient). scripts is the Lua engine whose
+// telnet server and the MCP server use. talkLLM is how NPC
+// conversations (`talk`, and `say` once one's started) get their LLM
+// client (nil for llm.GetClient). scripts is the Lua engine whose
 // hooks the commands call; nil for a world with no scripting, which
 // also leaves out the `reload` and `unload` commands.
 func BuildAll(sessions *session.Registry, w *world.World, players repository.PlayerRepository, talkLLM func() (llm.Client, error), scripts *scripting.Engine) []Command {
@@ -70,6 +71,8 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 	goCommand.scripts, pickUp.scripts, drop.scripts, attack.scripts, say.scripts = scripts, scripts, scripts, scripts, scripts
 	throw := NewThrowCommand(sessions, w, players)
 	teleport.scripts, throw.scripts = scripts, scripts
+	talk := NewTalkCommand(sessions, w, talkLLM)
+	say.chat = talk.chat
 
 	commands := []Command{
 		NewLookCommand(sessions, w),
@@ -85,7 +88,7 @@ func BuildAll(sessions *session.Registry, w *world.World, players repository.Pla
 		NewBuyCommand(sessions, w, players),
 		NewSellCommand(sessions, w, players),
 		NewOrderCommand(),
-		NewTalkCommand(sessions, w, talkLLM),
+		talk,
 		say,
 		teleport,
 	}

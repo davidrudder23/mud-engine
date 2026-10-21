@@ -248,3 +248,53 @@ func TestCompleteErrorIsWrappedAndLogged(t *testing.T) {
 		t.Errorf("records = %v", logs.Records(anthropicLog))
 	}
 }
+
+func TestChat(t *testing.T) {
+	isolate(t)
+	fake := &fakeMessages{responseJSON: textResponse("Aye, three dollars.", 0, 0)}
+	client, _ := NewAnthropicClient(AnthropicOptions{Messages: fake})
+
+	history := []Message{
+		{Role: RoleUser, Text: "[alice walks up to you.]"},
+		{Role: RoleAssistant, Text: "Good morning."},
+		{Role: RoleUser, Text: "How much is the dagger?"},
+	}
+	out, err := client.Chat(context.Background(), "You are Snorri.", history)
+	if err != nil || out != "Aye, three dollars." {
+		t.Fatalf("got %q, %v", out, err)
+	}
+	call := fake.calls[0]
+	if system := call.System; len(system) != 1 || system[0].Text != "You are Snorri." {
+		t.Errorf("system = %+v", system)
+	}
+	wantRoles := []anthropic.MessageParamRole{
+		anthropic.MessageParamRoleUser, anthropic.MessageParamRoleAssistant, anthropic.MessageParamRoleUser,
+	}
+	if len(call.Messages) != len(history) {
+		t.Fatalf("sent %d messages, want %d", len(call.Messages), len(history))
+	}
+	for i, m := range call.Messages {
+		if m.Role != wantRoles[i] || m.Content[0].OfText.Text != history[i].Text {
+			t.Errorf("message %d = %+v", i, m)
+		}
+	}
+}
+
+func TestChatWithNoTextIsARequestError(t *testing.T) {
+	isolate(t)
+	fake := &fakeMessages{responseJSON: `{"content": [], "stop_reason": "refusal"}`}
+	client, _ := NewAnthropicClient(AnthropicOptions{Messages: fake})
+
+	_, err := client.Chat(context.Background(), "", []Message{{Role: RoleUser, Text: "hi"}})
+	if !errors.Is(err, ErrRequest) {
+		t.Errorf("err = %v, want ErrRequest", err)
+	}
+}
+
+func TestChatErrorIsWrapped(t *testing.T) {
+	isolate(t)
+	client, _ := NewAnthropicClient(AnthropicOptions{Messages: &fakeMessages{err: errors.New("overloaded")}})
+	if _, err := client.Chat(context.Background(), "", []Message{{Role: RoleUser, Text: "hi"}}); !errors.Is(err, ErrRequest) {
+		t.Errorf("err = %v, want ErrRequest", err)
+	}
+}

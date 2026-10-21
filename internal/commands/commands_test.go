@@ -475,9 +475,15 @@ func talkFixture(t *testing.T) (*fixture, *llmtest.FakeClient, *TalkCommand) {
 	return f, fake, talk
 }
 
-func (f *fixture) addTom(description string) {
+// tomGreeting is what talking to Old Tom shows when the LLM says
+// "Welcome, traveler.": his line, then how to answer.
+const tomGreeting = "Old Tom says: Welcome, traveler.\r\n(You're talking with Old Tom. Use say <text> to answer.)"
+
+func (f *fixture) addTom(description string) *world.NPC {
 	start := f.room(worldtest.StartID)
-	start.NPCs = append(start.NPCs, &world.NPC{ID: "old-tom", Name: "Old Tom", Description: description})
+	tom := (&world.NPC{ID: "old-tom", Name: "Old Tom", Description: description}).Spawn(worldtest.StartID)
+	start.NPCs = append(start.NPCs, tom)
+	return tom
 }
 
 func TestTalk(t *testing.T) {
@@ -492,7 +498,7 @@ func TestTalk(t *testing.T) {
 
 	f.addTom("A grizzled bartender.")
 	for _, line := range []string{"talk old-tom", "talk to TOM"} { // by id; by name, "to" prefix, any case
-		if out := f.run(t, talk, line); out != "Old Tom says: Welcome, traveler." {
+		if out := f.run(t, talk, line); out != tomGreeting {
 			t.Errorf("%q: %q", line, out)
 		}
 	}
@@ -547,7 +553,7 @@ func TestTalkConfigErrorIsRetriedNextCall(t *testing.T) {
 	if out := f.run(t, talk, "talk tom"); out != "Old Tom doesn't seem to hear you." {
 		t.Errorf("first: %q", out)
 	}
-	if out := f.run(t, talk, "talk tom"); out != "Old Tom says: Welcome, traveler." {
+	if out := f.run(t, talk, "talk tom"); out != tomGreeting {
 		t.Errorf("second: %q", out)
 	}
 }
@@ -594,7 +600,7 @@ func TestRunnerDispatchesLocallyMatchedLines(t *testing.T) {
 		{"look", LookText(start)}, // first, while the room is as set up above
 		{"pick up rock", "You pick up a rock."},
 		{"drop rock", "You drop a rock."},
-		{"talk to old tom", "Old Tom says: Welcome, traveler."},
+		{"talk to old tom", tomGreeting},
 	}
 	for _, tt := range tests {
 		if out := f.runLine(t, runner, tt.line); out != tt.want {

@@ -18,6 +18,10 @@ const (
 	// sensible default; override with MUD_LLM_MODEL if needed.
 	DefaultAnthropicModel = "claude-sonnet-5"
 	defaultMaxTokens      = 1024
+	// NPC replies are asked to be short, but leave room for the model
+	// to think first (models that think by default count that against
+	// max_tokens) rather than cutting a reply off mid-sentence.
+	chatMaxTokens = 16000
 )
 
 var anthropicLogger = logging.For("mud.llm.anthropic")
@@ -94,7 +98,41 @@ func (c *AnthropicClient) Complete(ctx context.Context, prompt, system string) (
 	if system != "" {
 		params.System = []anthropic.TextBlockParam{{Text: system}}
 	}
+	return c.send(ctx, params)
+}
 
+func (c *AnthropicClient) Chat(ctx context.Context, system string, messages []Message) (string, error) {
+	params := anthropic.MessageNewParams{
+		Model:     anthropic.Model(c.model),
+		MaxTokens: chatMaxTokens,
+		Messages:  make([]anthropic.MessageParam, 0, len(messages)),
+	}
+	if system != "" {
+		params.System = []anthropic.TextBlockParam{{Text: system}}
+	}
+	for _, m := range messages {
+		block := anthropic.NewTextBlock(m.Text)
+		if m.Role == RoleAssistant {
+			params.Messages = append(params.Messages, anthropic.NewAssistantMessage(block))
+		} else {
+			params.Messages = append(params.Messages, anthropic.NewUserMessage(block))
+		}
+	}
+
+	reply, err := c.send(ctx, params)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(reply) == "" {
+		// E.g. a refusal: there's nothing to say, so treat it like a
+		// failed call rather than putting an empty line in an NPC's mouth.
+		return "", fmt.Errorf("%w: anthropic: no text in reply", ErrRequest)
+	}
+	return reply, nil
+}
+
+// send makes one Messages API call and returns the text of the reply.
+func (c *AnthropicClient) send(ctx context.Context, params anthropic.MessageNewParams) (string, error) {
 	started := time.Now()
 	response, err := c.messages.New(ctx, params)
 	elapsedMS := time.Since(started).Milliseconds()
@@ -107,6 +145,7 @@ func (c *AnthropicClient) Complete(ctx context.Context, prompt, system string) (
 		"model", c.model,
 		"input_tokens", response.Usage.InputTokens,
 		"output_tokens", response.Usage.OutputTokens,
+		"stop_reason", response.StopReason,
 		"elapsed_ms", elapsedMS,
 	)
 

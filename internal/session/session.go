@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"mudengine/internal/llm"
 	"mudengine/internal/world"
 )
 
@@ -26,6 +27,24 @@ type Session struct {
 	// Text waiting to be shown to this connection that it didn't ask
 	// for -- another player's `say`, say. See Send and Messages.
 	outbox chan string
+	// Who this connection is talking with, if anyone: started by the
+	// talk command, continued by say. Nil when not in a conversation.
+	// Like Player, only touched under the game lock.
+	Conversation *Conversation
+}
+
+// Conversation is a player's ongoing exchange with one NPC: who, where,
+// and everything said so far.
+type Conversation struct {
+	// The NPC instance being talked to (a spawn, not a definition).
+	NPC *world.NPC
+	// The room it started in. It ends the next time the player speaks
+	// with either side elsewhere; stepping out and back in between
+	// doesn't end it.
+	RoomID string
+	// Oldest first: the player's lines as llm.RoleUser, the NPC's as
+	// llm.RoleAssistant.
+	History []llm.Message
 }
 
 // How many undelivered messages a session holds before Send starts

@@ -17,12 +17,15 @@ package world
 //	  "id": "old-tom", "name": "Old Tom", "description": "...",
 //	  "commands": ["trade"],
 //	  "inventory": [{"id": "rag", "name": "a bar rag", "description": "..."}],
-//	  "type": "wandering", "move_interval": 120
+//	  "type": "wandering", "move_interval": 120,
+//	  "persona": "..."
 //	}
 //
 // id and name required; everything else optional. "type" is "npc" (the
 // default) or "wandering"; move_interval (seconds) is only read for
-// "wandering". An unrecognized type is a load error.
+// "wandering". An unrecognized type is a load error. "persona" is
+// private guidance for the LLM that plays the NPC in conversation (see
+// NPC.Persona).
 //
 // An enemy -- an NPC players can fight -- adds "enemy": true and a
 // "stats" object with all five stats (a load error if any is missing;
@@ -150,6 +153,7 @@ type npcJSON struct {
 	Type         *string    `json:"type"`
 	MoveInterval *float64   `json:"move_interval"`
 	Script       string     `json:"script"`
+	Persona      string     `json:"persona"`
 }
 
 type roomJSON struct {
@@ -343,6 +347,7 @@ func npcFromFile(path string) (*NPC, error) {
 		Enemy:       data.Enemy,
 		Commands:    append([]string{}, data.Commands...),
 		Inventory:   inventory,
+		Persona:     data.Persona,
 	}
 	if data.Enemy {
 		if npc.Stats, err = statsFromJSON(data.Stats, path, *data.ID); err != nil {

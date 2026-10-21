@@ -34,8 +34,7 @@ notes live in `game-idea.md`.
 - An `llm.Client` interface (`internal/llm/`) wraps calling an LLM,
   with Claude (Anthropic) as the first implementation and the provider
   swappable via config. Two things use it: command matching (below)
-  and `talk`, which asks it to improvise one in-character line from an
-  NPC.
+  and conversations with NPCs (see Talking to NPCs below).
 - The game is also exposed over MCP (`internal/mcpserver/`) -- one
   tool per command, for driving a single Player from an MCP-capable
   client (Claude Desktop, Claude Code, ...) instead of a human over
@@ -105,8 +104,10 @@ that name either becomes an existing player or creates a new one. Try:
     buy <item>       buys something from the shop; also typed as purchase
     sell <item>      sells something you're carrying to the shop
     order <drink>    flavor text only -- just echoes back what you asked for
-    talk to <npc>    gets one in-character line from an NPC in the room
-    say <text>       everyone else in the room sees "<you> says: <text>"
+    talk to <npc>    starts a conversation with an NPC in the room (see
+                     Talking to NPCs below)
+    say <text>       everyone else in the room sees "<you> says: <text>";
+                     whoever you're talking to answers
     quit             closes the connection
     help             lists the commands you can use
     reload <script>  loads the latest version of a Lua script (wizzards only)
@@ -209,6 +210,44 @@ none can have a script:
 The shopkeeper is an ordinary NPC, there to `talk` to -- the shop
 belongs to the room and trades whether or not anyone's behind the
 counter.
+
+## Talking to NPCs
+
+Any NPC can hold a conversation, played by the LLM. `talk to <npc>`
+starts one: the NPC greets you, and from then on answers whatever you
+`say`. Everyone else in the room hears both sides. Try it on Snorri in
+the weapon shop:
+
+    > talk to snorri
+    Snorri Stronginthearm says: Good morning, sir. ...
+    (You're talking with Snorri Stronginthearm. Use say <text> to answer.)
+    > say What would you recommend for a beginner?
+    You say: What would you recommend for a beginner?
+    Snorri Stronginthearm says: ...
+
+- **What the NPC knows:** its name, `description`, and `persona`; the
+  room and building it's in, and who else is there; what it's
+  carrying; and, in a shop, the stock with its prices. Nothing else, so
+  it shouldn't make up items or prices.
+- **Talk only:** an NPC can't hand anything over or change the game.
+  When you want something done, it should point you to the command
+  (`buy`, say).
+- **Memory:** an NPC remembers the last 20 lines of your conversation
+  (yours and its own), only for as long as the conversation lasts. It
+  ends when you `talk` to someone else, or when you `say` something
+  with either of you gone from the room it started in. Nothing is
+  saved to the database.
+- **Persona:** an NPC file can add a `"persona"`: private notes for the
+  LLM on how the NPC speaks, what it knows, and what it wants. Players
+  never see it directly. Without one, the NPC is played from its
+  `description` alone:
+
+      "persona": "You speak formally, call customers 'sir' or 'madam', and never haggle."
+
+- If the LLM can't be reached, the NPC "doesn't seem to hear you" and
+  the conversation carries on as if you hadn't spoken.
+- The game waits while the NPC replies (usually a second or two), the
+  same as for any command the LLM has to match.
 
 ## Scripting
 

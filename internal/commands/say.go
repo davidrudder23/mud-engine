@@ -16,13 +16,16 @@ import (
 //
 // "Other" is per session, not per name: someone logged in twice hears
 // their own other connection. NPCs don't hear any of it, except
-// scripted ones, which get their on_say.
+// scripted ones, which get their on_say, and whichever one the speaker
+// is in a conversation with (see TalkCommand), which answers.
 type SayCommand struct {
 	alwaysInRoom
 	verbs
 	sessions *session.Registry
 	// Nil for no scripting (see BuildAll).
 	scripts *scripting.Engine
+	// Nil for no NPC conversations (see BuildAll).
+	chat *npcChat
 }
 
 func NewSayCommand(sessions *session.Registry) *SayCommand {
@@ -30,7 +33,7 @@ func NewSayCommand(sessions *session.Registry) *SayCommand {
 }
 
 func (c *SayCommand) Describe() string {
-	return "say <text>      says something to everyone in the room"
+	return "say <text>      says something to everyone in the room, including whoever you're talking to"
 }
 func (c *SayCommand) Parameters() []Parameter {
 	return []Parameter{{Name: "text", Type: String, Required: true}}
@@ -52,5 +55,15 @@ func (c *SayCommand) RunCommand(ctx context.Context, line string, sessionID uuid
 			listener.Send(message)
 		}
 	}
-	return withLines("You say: "+text, c.scripts.PlayerSaid(ctx, s.Player, text)), nil
+	reply := "You say: " + text
+	if c.chat != nil {
+		answer, err := c.chat.hear(ctx, s, text)
+		if err != nil {
+			return "", err
+		}
+		if answer != "" {
+			reply += "\r\n" + answer
+		}
+	}
+	return withLines(reply, c.scripts.PlayerSaid(ctx, s.Player, text)), nil
 }
