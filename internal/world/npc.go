@@ -55,6 +55,11 @@ type NPC struct {
 	// The Lua file (in World.ScriptsDir) giving this NPC behaviour
 	// beyond the defaults; empty for none. See the scripting package.
 	Script string
+	// Private notes for the LLM playing this NPC in conversation (see
+	// the talk and say commands): how it speaks, what it knows, what it
+	// wants. Players never see this directly, unlike Description.
+	// Empty for none -- the NPC is then played from Description alone.
+	Persona string
 }
 
 // Wander is the extra configuration a wandering NPC carries: it moves
