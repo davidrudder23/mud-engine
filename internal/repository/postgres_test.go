@@ -66,6 +66,9 @@ func TestPostgresCreateStartsWithDefaultStats(t *testing.T) {
 	if player.Stats == nil || *player.Stats != world.DefaultPlayerStats() {
 		t.Errorf("stats = %+v, want %+v", player.Stats, world.DefaultPlayerStats())
 	}
+	if player.Money != world.DefaultPlayerMoney {
+		t.Errorf("money = %d, want %d", player.Money, world.DefaultPlayerMoney)
+	}
 	if player.ID == uuid.Nil || player.CurrentRoomID != "start" || player.CreatedAt.IsZero() {
 		t.Errorf("player = %+v", player)
 	}
@@ -81,6 +84,7 @@ func TestPostgresSaveRoundTripsRoomAndStats(t *testing.T) {
 	player.Stats = &world.Stats{
 		Strength: 1, Dexterity: 2, Luck: 3, HitPoints: 4, MaxHitPoints: 5, Stamina: 6, MaxStamina: 7,
 	}
+	player.Money = 8
 	if err := repo.Save(ctx, player); err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +97,9 @@ func TestPostgresSaveRoundTripsRoomAndStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if got.CurrentRoomID != "north" || *got.Stats != *player.Stats {
-			t.Errorf("%s: room %q, stats %+v; want north, %+v", name, got.CurrentRoomID, got.Stats, player.Stats)
+		if got.CurrentRoomID != "north" || *got.Stats != *player.Stats || got.Money != 8 {
+			t.Errorf("%s: room %q, stats %+v, money %d; want north, %+v, 8",
+				name, got.CurrentRoomID, got.Stats, got.Money, player.Stats)
 		}
 		if got == player {
 			t.Errorf("%s: returned the same instance, not a fresh row", name)

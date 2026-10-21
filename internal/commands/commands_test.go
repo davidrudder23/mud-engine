@@ -769,6 +769,8 @@ func TestRunnerPassOrder(t *testing.T) {
 
 func TestRunnerHelpListsEveryCommand(t *testing.T) {
 	f, runner, _ := runnerFixture(t)
+	// browse, buy, and sell are only listed where there's a shop.
+	f.room(worldtest.StartID).Shop = &world.Shop{}
 	lines := strings.Split(f.runLine(t, runner, "help"), "\r\n")
 	for _, command := range BuildAll(f.sessions, f.world, f.repo, nil, nil) {
 		if !slices.Contains(lines, command.Describe()) {

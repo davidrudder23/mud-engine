@@ -18,7 +18,7 @@ import (
 var logger = logging.For("mud.repository")
 
 const selectColumns = "id, name, current_room_id, created_at, updated_at, " +
-	"strength, dexterity, luck, hit_points, max_hit_points, stamina, max_stamina"
+	"strength, dexterity, luck, hit_points, max_hit_points, stamina, max_stamina, money"
 
 // uniqueViolation is Postgres' SQLSTATE for a unique constraint
 // failure.
@@ -44,7 +44,7 @@ func scanPlayer(row pgx.Row) (*world.Player, error) {
 	)
 	err := row.Scan(&id, &player.Name, &player.CurrentRoomID, &player.CreatedAt, &player.UpdatedAt,
 		&stats.Strength, &stats.Dexterity, &stats.Luck, &stats.HitPoints, &stats.MaxHitPoints,
-		&stats.Stamina, &stats.MaxStamina)
+		&stats.Stamina, &stats.MaxStamina, &player.Money)
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +108,14 @@ func (r *PostgresPlayerRepository) Save(ctx context.Context, player *world.Playe
 		_, err = r.pool.Exec(ctx,
 			`UPDATE players SET current_room_id = $1,
 				strength = $2, dexterity = $3, luck = $4, hit_points = $5, max_hit_points = $6,
-				stamina = $7, max_stamina = $8, updated_at = now()
-			WHERE id = $9`,
+				stamina = $7, max_stamina = $8, money = $9, updated_at = now()
+			WHERE id = $10`,
 			player.CurrentRoomID, s.Strength, s.Dexterity, s.Luck, s.HitPoints, s.MaxHitPoints,
-			s.Stamina, s.MaxStamina, pgUUID(player.ID))
+			s.Stamina, s.MaxStamina, player.Money, pgUUID(player.ID))
 	} else {
 		_, err = r.pool.Exec(ctx,
-			`UPDATE players SET current_room_id = $1, updated_at = now() WHERE id = $2`,
-			player.CurrentRoomID, pgUUID(player.ID))
+			`UPDATE players SET current_room_id = $1, money = $2, updated_at = now() WHERE id = $3`,
+			player.CurrentRoomID, player.Money, pgUUID(player.ID))
 	}
 	if err != nil {
 		return failed("save player", err)

@@ -33,6 +33,10 @@ type Player struct {
 	// What this player fights with. Persisted alongside the room; the
 	// repository fills it in (DefaultPlayerStats for a new player).
 	Stats *Stats
+	// Ankh-Morpork dollars in hand, for the buy and sell commands.
+	// Persisted; the repository fills it in (DefaultPlayerMoney for a
+	// new player).
+	Money int
 }
 
 func (p *Player) Format() string {
@@ -51,6 +55,7 @@ type PlayerView struct {
 	Name      string     `json:"name"`
 	Inventory []ItemView `json:"inventory"`
 	Stats     *StatsView `json:"stats,omitempty"`
+	Money     int        `json:"money"`
 }
 
 func (p *Player) View() PlayerView {
@@ -59,7 +64,7 @@ func (p *Player) View() PlayerView {
 		s := p.ID.String()
 		id = &s
 	}
-	return PlayerView{ID: id, Name: p.Name, Inventory: itemViews(p.Inventory), Stats: p.Stats.View()}
+	return PlayerView{ID: id, Name: p.Name, Inventory: itemViews(p.Inventory), Stats: p.Stats.View(), Money: p.Money}
 }
 
 // GetCommands returns the verbs this player's presence makes available,

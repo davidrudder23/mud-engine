@@ -211,8 +211,8 @@ func itemList(items []*world.Item) string {
 	}
 }
 
-// StatsCommand shows the player's own stats and what they're fighting
-// with.
+// StatsCommand shows the player's own stats, what they're fighting
+// with, and how much money they have.
 type StatsCommand struct {
 	alwaysInRoom
 	verbs
@@ -224,7 +224,7 @@ func NewStatsCommand(sessions *session.Registry) *StatsCommand {
 }
 
 func (c *StatsCommand) Describe() string {
-	return "stats       shows your hit points, stamina, and stats"
+	return "stats       shows your hit points, stamina, stats, and money"
 }
 func (c *StatsCommand) Parameters() []Parameter { return nil }
 
@@ -246,5 +246,6 @@ func (c *StatsCommand) RunCommand(_ context.Context, _ string, sessionID uuid.UU
 		fmt.Sprintf("Stamina:    %d/%d", stats.Stamina, stats.MaxStamina),
 		fmt.Sprintf("Strength %d, Dexterity %d, Luck %d", stats.Strength, stats.Dexterity, stats.Luck),
 		"Wielding:   " + wielding,
+		"Money:      " + world.FormatMoney(s.Player.Money),
 	}, "\r\n"), nil
 }

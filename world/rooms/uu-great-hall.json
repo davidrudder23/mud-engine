@@ -3,7 +3,7 @@
   "structure_id": "unseen-university",
   "description": "Long tables stretch beneath a vaulted ceiling hung with the tattered banners of wizardly orders that no longer exist, mostly for reasons involving spontaneous combustion. The air smells of high tea and faint ozone.",
   "items": [
-    { "id": "silver-teapot", "name": "a dented silver teapot", "description": "It's still faintly warm, and occasionally mutters." }
+    { "id": "silver-teapot", "name": "a dented silver teapot", "description": "It's still faintly warm, and occasionally mutters.", "value": 12 }
   ],
   "doorways": [
     { "direction": "south", "to": "uu-gate", "description": "Back out to the front gate." },

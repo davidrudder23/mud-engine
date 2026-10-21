@@ -141,7 +141,19 @@ func TestViews(t *testing.T) {
 		{
 			"unpersisted player has null id",
 			(&Player{Name: "alice", Inventory: []*Item{{ID: "rock", Name: "a rock"}}}).View(),
-			`{"id": null, "name": "alice", "inventory": [{"id": "rock", "name": "a rock", "description": ""}]}`,
+			`{"id": null, "name": "alice", "inventory": [{"id": "rock", "name": "a rock", "description": ""}], "money": 0}`,
+		},
+		{
+			"item with a value",
+			(&Item{ID: "teapot", Name: "a teapot", Value: 12}).View(),
+			`{"id": "teapot", "name": "a teapot", "description": "", "value": 12}`,
+		},
+		{
+			"room with a shop",
+			(&Room{ID: "room", StructureID: "structure", Shop: &Shop{Stock: []*Item{{ID: "dagger", Name: "a dagger", Value: 3}}}}).View(),
+			`{"id": "room", "structure_id": "structure", "description": "",
+			  "items": [], "npcs": [], "players": [], "doorways": [], "commands": ["look", "browse", "buy", "sell"],
+			  "shop": {"stock": [{"id": "dagger", "name": "a dagger", "description": "", "value": 3}]}}`,
 		},
 		{
 			"empty room",

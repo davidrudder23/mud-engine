@@ -3,7 +3,7 @@
   "structure_id": "unseen-university",
   "description": "Shelves of grimoires rise into a gloom the ceiling has given up trying to contain. Some books are chained to their shelves; others appear to be doing the chaining.",
   "items": [
-    { "id": "chained-grimoire", "name": "a heavily chained grimoire", "description": "It growls softly whenever anyone raises their voice." }
+    { "id": "chained-grimoire", "name": "a heavily chained grimoire", "description": "It growls softly whenever anyone raises their voice.", "value": 15 }
   ],
   "doorways": [
     { "direction": "south", "to": "uu-great-hall", "description": "Back toward the Great Hall." },

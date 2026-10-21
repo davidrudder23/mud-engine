@@ -3,7 +3,7 @@
   "structure_id": "pseudopolis-yard",
   "description": "A row of iron-barred cells currently hosting one unconscious troll, two men who each insist they've never met the other, and a smell that can only be described as 'the Ankh, but concentrated'.",
   "items": [
-    { "id": "tin-cup", "name": "a battered tin cup", "description": "Someone has been running it along the bars. Recently." }
+    { "id": "tin-cup", "name": "a battered tin cup", "description": "Someone has been running it along the bars. Recently.", "value": 1 }
   ],
   "doorways": [
     { "direction": "west", "to": "watch-muster-room", "description": "Back to the muster room." }
