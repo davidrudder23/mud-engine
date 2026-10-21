@@ -31,6 +31,7 @@ type row struct {
 	name          string
 	currentRoomID string
 	stats         world.Stats
+	money         int
 	createdAt     time.Time
 	updatedAt     time.Time
 }
@@ -53,7 +54,7 @@ func (f *FakePlayerRepository) Create(_ context.Context, name, startingRoomID st
 	id := uuid.New()
 	f.rows[id] = &row{
 		name: name, currentRoomID: startingRoomID, stats: world.DefaultPlayerStats(),
-		createdAt: now, updatedAt: now,
+		money: world.DefaultPlayerMoney, createdAt: now, updatedAt: now,
 	}
 	f.order = append(f.order, id)
 	return f.toPlayer(id), nil
@@ -90,6 +91,7 @@ func (f *FakePlayerRepository) Save(_ context.Context, player *world.Player) err
 	if player.Stats != nil {
 		r.stats = *player.Stats
 	}
+	r.money = player.Money
 	r.updatedAt = time.Now().UTC()
 	return nil
 }
@@ -114,5 +116,6 @@ func (f *FakePlayerRepository) toPlayer(id uuid.UUID) *world.Player {
 		CreatedAt:     r.createdAt,
 		UpdatedAt:     r.updatedAt,
 		Stats:         &stats,
+		Money:         r.money,
 	}
 }

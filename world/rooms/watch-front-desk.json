@@ -6,6 +6,7 @@
   "doorways": [
     { "direction": "west", "to": "uu-gate", "description": "A grimy street back toward Unseen University." },
     { "direction": "east", "to": "drum-taproom", "description": "A shortcut through an alley toward the sound of breaking furniture." },
-    { "direction": "north", "to": "watch-muster-room", "description": "Through a low doorway into the muster room." }
+    { "direction": "north", "to": "watch-muster-room", "description": "Through a low doorway into the muster room." },
+    { "direction": "south", "to": "bs-showroom", "description": "Out the front door and across the street, to a shop window full of things with edges." }
   ]
 }

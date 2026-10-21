@@ -1,0 +1,9 @@
+{
+  "id": "snorri-stronginthearm",
+  "name": "Snorri Stronginthearm",
+  "description": "A dwarf in a leather apron who minds the counter of Burleigh & Stronginthearm, the weapon shop, with the unhurried air of someone standing behind several hundred edged objects. Scrupulously polite, proud of the craftsmanship, and entirely incurious about what the customer wants it for. He sells daggers, cudgels, swords, spears, and axes, quotes every price in Ankh-Morpork dollars, will buy anything of value for half what it's worth, and regards haggling as a hobby other people have.",
+  "commands": ["trade"],
+  "inventory": [
+    { "id": "polishing-cloth", "name": "a polishing cloth", "description": "Soft, oily, and never more than an arm's length from something that needs it." }
+  ]
+}

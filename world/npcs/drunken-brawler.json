@@ -5,6 +5,6 @@
   "enemy": true,
   "stats": { "strength": 7, "hit_points": 16, "stamina": 8, "luck": 2, "dexterity": 3 },
   "inventory": [
-    { "id": "broken-bottle", "name": "a broken bottle", "description": "The business end of a bottle of something that was probably not worth drinking.", "weapon": { "damage": 3 } }
+    { "id": "broken-bottle", "name": "a broken bottle", "description": "The business end of a bottle of something that was probably not worth drinking.", "weapon": { "damage": 3 }, "value": 1 }
   ]
 }

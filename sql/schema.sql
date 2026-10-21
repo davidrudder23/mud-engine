@@ -31,3 +31,8 @@ ALTER TABLE players
     ADD COLUMN IF NOT EXISTS max_hit_points INT NOT NULL DEFAULT 20,
     ADD COLUMN IF NOT EXISTS stamina        INT NOT NULL DEFAULT 10,
     ADD COLUMN IF NOT EXISTS max_stamina    INT NOT NULL DEFAULT 10;
+
+-- Ankh-Morpork dollars in hand (see the buy and sell commands). Keep
+-- the default in sync with world.DefaultPlayerMoney.
+ALTER TABLE players
+    ADD COLUMN IF NOT EXISTS money INT NOT NULL DEFAULT 10;

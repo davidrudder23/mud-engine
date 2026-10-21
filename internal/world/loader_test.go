@@ -300,6 +300,40 @@ func TestLoadWeaponTypes(t *testing.T) {
 	}
 }
 
+func TestLoadShopAndItemValues(t *testing.T) {
+	d := newWorldDir(t)
+	d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+	d.room(t, "shop.json", obj{
+		"id": "shop", "structure_id": "s",
+		"items": []obj{{"id": "teapot", "value": 12}, {"id": "rock"}},
+		"shop": obj{"stock": []obj{
+			{"id": "dagger", "name": "a dagger", "weapon": obj{"damage": 2}, "value": 3},
+			{"id": "spear", "weapon": obj{"damage": 5, "type": "spear"}, "value": 14},
+		}},
+	})
+	d.room(t, "street.json", obj{"id": "street", "structure_id": "s"})
+	w := d.mustLoad(t)
+
+	shop := mustRoom(t, w, "shop")
+	if shop.Items[0].Value != 12 || shop.Items[1].Value != 0 {
+		t.Errorf("item values = %d, %d", shop.Items[0].Value, shop.Items[1].Value)
+	}
+	if shop.Shop == nil || len(shop.Shop.Stock) != 2 {
+		t.Fatalf("shop = %+v", shop.Shop)
+	}
+	dagger, spear := shop.Shop.Stock[0], shop.Shop.Stock[1]
+	if dagger.Name != "a dagger" || dagger.Value != 3 || dagger.Weapon.Damage != 2 || spear.Value != 14 || !spear.Throwable() {
+		t.Errorf("stock = %+v, %+v", dagger, spear)
+	}
+	// Stock isn't lying around the room.
+	if len(shop.Items) != 2 {
+		t.Errorf("items = %d", len(shop.Items))
+	}
+	if mustRoom(t, w, "street").Shop != nil {
+		t.Error("a room with no shop has one")
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -370,6 +404,22 @@ func TestLoadErrors(t *testing.T) {
 		{"unknown weapon type", func(t *testing.T, d worldDir) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
 			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{{"id": "bow", "weapon": obj{"damage": 2, "type": "bow"}}}})
+		}},
+		{"item with a negative value", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "items": []obj{{"id": "rock", "value": -1}}})
+		}},
+		{"shop item with no value", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "shop": obj{"stock": []obj{{"id": "dagger"}}}})
+		}},
+		{"shop item with a script", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "shop": obj{"stock": []obj{{"id": "dagger", "value": 3, "script": "dagger.lua"}}}})
+		}},
+		{"shop item missing id", func(t *testing.T, d worldDir) {
+			d.structure(t, "s.json", obj{"id": "s", "name": "S"})
+			d.room(t, "r.json", obj{"id": "r", "structure_id": "s", "shop": obj{"stock": []obj{{"value": 3}}}})
 		}},
 		{"room references unknown npc", func(t *testing.T, d worldDir) {
 			d.structure(t, "s.json", obj{"id": "s", "name": "S"})

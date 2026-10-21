@@ -1,0 +1,19 @@
+{
+  "id": "bs-showroom",
+  "structure_id": "burleigh-stronginthearm",
+  "description": "Blades hang in gleaming rows along oak-panelled walls, each with a small card describing it in the hushed language of a wine list. A sign over the counter reads: YOU BEND IT, YOU BOUGHT IT. YOU BLEED ON IT, YOU ALSO BOUGHT IT. A second, smaller sign adds that the management buys as well as sells, at prices it describes as 'fair' and its customers describe as 'half'.",
+  "items": [],
+  "doorways": [
+    { "direction": "north", "to": "watch-front-desk", "description": "Back across the street to the Watch House." }
+  ],
+  "npcs": ["snorri-stronginthearm"],
+  "shop": {
+    "stock": [
+      { "id": "dagger", "name": "a serviceable dagger", "description": "The card says 'ideal for the beginner'. It does not say beginner at what.", "weapon": { "damage": 2 }, "value": 3 },
+      { "id": "cudgel", "name": "a stout oak cudgel", "description": "A length of seasoned oak with a leather wrist-loop. No moving parts, no instructions, no complaints so far.", "weapon": { "damage": 3 }, "value": 5 },
+      { "id": "short-sword", "name": "a short sword", "description": "Plain, sharp, and honest, which makes it the only thing in Ankh-Morpork that is all three.", "weapon": { "damage": 4 }, "value": 10 },
+      { "id": "hunting-spear", "name": "a hunting spear", "description": "Ash shaft, leaf-shaped head, and a balance that suggests it would much rather be somewhere else, quickly.", "weapon": { "damage": 5, "type": "spear" }, "value": 14 },
+      { "id": "battle-axe", "name": "a dwarfish battle-axe", "description": "Double-headed and heavy enough to settle most arguments by being put down on the table. The maker's rune translates roughly as 'you're welcome'.", "weapon": { "damage": 6 }, "value": 20 }
+    ]
+  }
+}

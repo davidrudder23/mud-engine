@@ -8,12 +8,13 @@ notes live in `game-idea.md`.
   and `world/npcs/*.json` (see `internal/world/loader.go`). Every
   room belongs to exactly one structure (a building, cavern, etc.).
   Verbs so far: `look`/`go`/`quit`/`help`/`pick up`/`drop`/`inventory`/
-  `stats`/`attack`/`throw`/`order`/`talk`/`say`/`teleport`.
+  `stats`/`attack`/`throw`/`browse`/`buy`/`sell`/`order`/`talk`/`say`/
+  `teleport`.
 - Players are dynamic, multi-user **state**, persisted in Postgres (see
-  `internal/repository/`). Inventory (what `pick up` adds to) is
-  also dynamic, but *not* persisted yet -- it lives only in memory for
-  the session, same as room occupancy. NPCs have their own inventory
-  the same way, per spawned instance (below).
+  `internal/repository/`). Money is too (see Shops below). Inventory
+  (what `pick up` adds to) is also dynamic, but *not* persisted yet --
+  it lives only in memory for the session, same as room occupancy. NPCs
+  have their own inventory the same way, per spawned instance (below).
 - An `npcs/*.json` id is a *definition* (`World.NPCs`), not a specific
   NPC standing anywhere -- each room JSON's own `npcs` list spawns one
   independent instance per entry (`NPC.Spawn(roomID)`), so the same id
@@ -96,9 +97,13 @@ that name either becomes an existing player or creates a new one. Try:
                      substring match against the item's id or name)
     drop <item>      moves an item from your inventory into the current room
     inventory        lists what you're carrying
-    stats            shows your hit points, stamina, stats, and weapon
+    stats            shows your hit points, stamina, stats, weapon, and money
     attack <npc>     fights an enemy in the room (see Combat below)
     throw <item> <dir>  throws a spear that way, e.g. "throw spear east" (see Combat below)
+    browse           lists what the shop you're standing in sells, with prices (see
+                     Shops below); also typed as wares
+    buy <item>       buys something from the shop; also typed as purchase
+    sell <item>      sells something you're carrying to the shop
     order <drink>    flavor text only -- just echoes back what you asked for
     talk to <npc>    gets one in-character line from an NPC in the room
     say <text>       everyone else in the room sees "<you> says: <text>"
@@ -163,7 +168,8 @@ back if it's still standing.
 - Only enemies can be attacked. Enemies only fight back; none start
   fights yet. No player-vs-player.
 - Player stats are saved in Postgres after every exchange. New players
-  start at strength/dexterity/luck 5, 20 hit points, 10 stamina.
+  start at strength/dexterity/luck 5, 20 hit points, 10 stamina, and
+  AM$10 (see Shops below).
   Stamina only regenerates while you're logged in.
 
 An enemy's stats (all five required) and weapons are authored in its
@@ -175,6 +181,34 @@ NPC file, e.g. `world/npcs/drunken-brawler.json`:
 
 The Mended Drum has two so far: a rat in the cellar and a brawler
 upstairs. The Watch's holding cells have a third, a swamp dragon.
+
+## Shops
+
+A room with a `"shop"` is somewhere to buy and sell; the first is
+Burleigh & Stronginthearm, the weapon shop south of the Watch's front
+desk (`world/rooms/bs-showroom.json`).
+
+- **Money** is Ankh-Morpork dollars (`AM$`), whole ones only. A new
+  player starts with AM$10. It's saved in Postgres after every sale, so
+  it survives a logout even though what you bought doesn't.
+- **Value:** any item can have a `"value"`. A shop charges that for it
+  and pays half that (rounded down, at least AM$1) for one. An item
+  with no value can't be sold.
+- **Stock** never runs out: `buy` hands over a copy. What a shop buys
+  from you isn't put on sale; it's gone.
+- `browse`, `buy`, and `sell` only show up in `help` where there's a
+  shop, and say "There's no shop here." anywhere else.
+
+A shop is authored on its room; every stock item needs a value, and
+none can have a script:
+
+    "shop": { "stock": [
+      { "id": "dagger", "name": "a serviceable dagger", "weapon": { "damage": 2 }, "value": 3 }
+    ] }
+
+The shopkeeper is an ordinary NPC, there to `talk` to -- the shop
+belongs to the room and trades whether or not anyone's behind the
+counter.
 
 ## Scripting
 
@@ -263,7 +297,7 @@ connectivity; it skips unless `MUD_LLM_API_KEY` is set.
     cmd/                  server, mcp-server, migrate, demo* entrypoints
     bin/                  build output (gitignored)
     internal/
-      world               Structure/Room/Item/Doorway/NPC/Player, World
+      world               Structure/Room/Item/Doorway/NPC/Player/Shop, World
                           bookkeeping, the JSON loader, and the *View
                           snapshots the MCP server returns
       combat              combat rules (Attack, hit/damage/crit) and

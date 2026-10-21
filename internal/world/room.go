@@ -23,6 +23,8 @@ type Room struct {
 	// whatever GetCommands derives from the room's own content -- so a
 	// one-off room can offer a verb without a matching item/player.
 	Commands []string
+	// Non-nil if things can be bought and sold here.
+	Shop *Shop
 }
 
 // Format renders the room as telnet-friendly text (CRLF line endings).
@@ -69,6 +71,7 @@ type RoomView struct {
 	Players     []PlayerView  `json:"players"`
 	Doorways    []DoorwayView `json:"doorways"`
 	Commands    []string      `json:"commands"`
+	Shop        *ShopView     `json:"shop,omitempty"`
 }
 
 func (r *Room) View() RoomView {
@@ -81,6 +84,7 @@ func (r *Room) View() RoomView {
 		Players:     make([]PlayerView, 0, len(r.Players)),
 		Doorways:    make([]DoorwayView, 0, len(r.Doorways)),
 		Commands:    r.GetCommands(),
+		Shop:        r.Shop.View(),
 	}
 	for _, npc := range r.NPCs {
 		view.NPCs = append(view.NPCs, npc.View())
@@ -97,8 +101,9 @@ func (r *Room) View() RoomView {
 // GetCommands returns the verbs available in this room right now, for
 // `look`'s "you can try" hint: always "look"; "go" if there's a
 // doorway; whatever the items, NPCs, and players present each
-// contribute; plus whatever this room's JSON authored onto Commands.
-// Deduplicated, order preserved.
+// contribute; "browse", "buy", and "sell" if there's a shop; plus
+// whatever this room's JSON authored onto Commands. Deduplicated, order
+// preserved.
 func (r *Room) GetCommands() []string {
 	commands := []string{"look"}
 	if len(r.Doorways) > 0 {
@@ -112,6 +117,9 @@ func (r *Room) GetCommands() []string {
 	}
 	for _, player := range r.Players {
 		commands = append(commands, player.GetCommands()...)
+	}
+	if r.Shop != nil {
+		commands = append(commands, "browse", "buy", "sell")
 	}
 	commands = append(commands, r.Commands...)
 	return dedupe(commands)

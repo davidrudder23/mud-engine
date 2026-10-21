@@ -262,8 +262,9 @@ func TestStatsCommand(t *testing.T) {
 		Strength: 4, Dexterity: 6, Luck: 3, HitPoints: 12, MaxHitPoints: 21, Stamina: 7, MaxStamina: 9,
 	}
 
+	f.player.Money = 13
 	out := f.run(t, stats, "stats")
-	for _, want := range []string{"12/21", "7/9", "Strength 4", "Dexterity 6", "Luck 3", "bare hands"} {
+	for _, want := range []string{"12/21", "7/9", "Strength 4", "Dexterity 6", "Luck 3", "bare hands", "AM$13"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in %q", want, out)
 		}

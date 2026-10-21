@@ -41,6 +41,12 @@ package world
 //
 //	{"id": "spear", "name": "a spear", "weapon": {"damage": 5, "type": "spear"}}
 //
+// Any item can have a "value", what it's worth in Ankh-Morpork dollars
+// (default 0, worthless; negative is a load error): a shop charges
+// that for it and pays half that for one.
+//
+//	{"id": "teapot", "name": "a silver teapot", "value": 12}
+//
 // An NPC or an item can name a Lua script that gives it behaviour (see
 // the scripting package and lua_examples.md):
 //
@@ -57,10 +63,14 @@ package world
 //	  "items": [{"id": "torch", "name": "a torch", "description": "Still lit."}],
 //	  "doorways": [{"direction": "north", "to": "cave-tunnel", "description": "..."}],
 //	  "npcs": ["old-tom"],
-//	  "commands": ["light torch"]
+//	  "commands": ["light torch"],
+//	  "shop": {"stock": [{"id": "dagger", "name": "a dagger", "weapon": {"damage": 2}, "value": 3}]}
 //	}
 //
-// id and structure_id required; everything else defaults to empty. An
+// id and structure_id required; everything else defaults to empty. A
+// "shop" makes the room somewhere to buy and sell (see Shop): its
+// "stock" is the items for sale, each needing a value above 0 and no
+// script. An
 // item's name defaults to its id. Doorway targets, structure_ids, and
 // npcs references are validated only once every file has been read, so
 // files can reference each other regardless of load order.
@@ -100,6 +110,7 @@ type itemJSON struct {
 	Name        *string     `json:"name"`
 	Description string      `json:"description"`
 	Weapon      *weaponJSON `json:"weapon"`
+	Value       int         `json:"value"`
 	Script      string      `json:"script"`
 }
 
@@ -149,6 +160,11 @@ type roomJSON struct {
 	Doorways    []doorwayJSON `json:"doorways"`
 	NPCs        []string      `json:"npcs"`
 	Commands    []string      `json:"commands"`
+	Shop        *shopJSON     `json:"shop"`
+}
+
+type shopJSON struct {
+	Stock []itemJSON `json:"stock"`
 }
 
 // npcTypes lists the recognized NPC "type" values ("npc" is the
@@ -200,7 +216,10 @@ func itemFromJSON(data itemJSON, source string) (*Item, error) {
 	if err := checkScript(data.Script, source, fmt.Sprintf("item %q", *data.ID)); err != nil {
 		return nil, err
 	}
-	item := &Item{ID: *data.ID, Name: *data.ID, Description: data.Description, Script: data.Script}
+	if data.Value < 0 {
+		return nil, loadErrorf("%s: item %q has a negative value (%d)", source, *data.ID, data.Value)
+	}
+	item := &Item{ID: *data.ID, Name: *data.ID, Description: data.Description, Value: data.Value, Script: data.Script}
 	if data.Name != nil {
 		item.Name = *data.Name
 	}
@@ -248,6 +267,27 @@ func itemsFromJSON(data []itemJSON, source string) ([]*Item, error) {
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func shopFromJSON(data *shopJSON, source string) (*Shop, error) {
+	if data == nil {
+		return nil, nil
+	}
+	stock, err := itemsFromJSON(data.Stock, source)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range stock {
+		if item.Value == 0 {
+			return nil, loadErrorf("%s: shop item %q is missing required field 'value'", source, item.ID)
+		}
+		// Scripts are loaded for the items the world starts with; a
+		// copy made at the counter later would have none to run.
+		if item.Script != "" {
+			return nil, loadErrorf("%s: shop item %q has a script (a shop's stock can't be scripted)", source, item.ID)
+		}
+	}
+	return &Shop{Stock: stock}, nil
 }
 
 func structureFromFile(path string) (*Structure, error) {
@@ -342,7 +382,13 @@ func roomFromFile(path string) (*Room, []string, error) {
 		doorways = append(doorways, &Doorway{Direction: *d.Direction, To: *d.To, Description: d.Description})
 	}
 
+	shop, err := shopFromJSON(data.Shop, path)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	room := &Room{
+		Shop:        shop,
 		ID:          *data.ID,
 		StructureID: *data.StructureID,
 		Description: data.Description,
@@ -358,7 +404,8 @@ func roomFromFile(path string) (*Room, []string, error) {
 //
 // Returns a *LoadError if a file is malformed, an id is duplicated, a
 // doorway points at an unknown room, a room references an unknown
-// structure_id or npc id, or an npc has an unrecognized type.
+// structure_id or npc id, an npc has an unrecognized type, or a shop
+// stocks something with no value or with a script.
 func Load(worldDir string) (*World, error) {
 	structuresDir := filepath.Join(worldDir, "structures")
 	roomsDir := filepath.Join(worldDir, "rooms")

@@ -16,6 +16,10 @@ type Item struct {
 	Description string
 	// Non-nil if this item can be fought with.
 	Weapon *Weapon
+	// What this item is worth, in Ankh-Morpork dollars: what a shop
+	// charges for it, and twice what one pays (see SellPrice). 0 for
+	// something no shop would take.
+	Value int
 	// The Lua file (in World.ScriptsDir) giving this item behaviour
 	// beyond the defaults; empty for none. See the scripting package.
 	Script string
@@ -64,6 +68,7 @@ type ItemView struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	Weapon      *WeaponView `json:"weapon,omitempty"`
+	Value       int         `json:"value,omitempty"`
 }
 
 // WeaponView is the JSON-serializable snapshot of a Weapon. Type is
@@ -74,7 +79,7 @@ type WeaponView struct {
 }
 
 func (i *Item) View() ItemView {
-	view := ItemView{ID: i.ID, Name: i.Name, Description: i.Description}
+	view := ItemView{ID: i.ID, Name: i.Name, Description: i.Description, Value: i.Value}
 	if i.Weapon != nil {
 		view.Weapon = &WeaponView{Damage: i.Weapon.Damage, Type: i.Weapon.Type}
 	}
